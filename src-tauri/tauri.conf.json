@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "vasak-panel",
+  "productName": "vpanel",
   "version": "0.1.0",
   "identifier": "ar.net.vasak.panel",
   "build": {
@@ -12,9 +12,10 @@
   "app": {
     "windows": [
       {
-        "title": "vasak-panel",
+        "title": "vpanel",
         "width": 800,
-        "height": 600
+        "height": 600,
+        "decorations": false
       }
     ],
     "security": {
