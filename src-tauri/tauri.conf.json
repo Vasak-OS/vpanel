@@ -13,9 +13,18 @@
     "windows": [
       {
         "title": "vpanel",
+        "decorations": false,
         "width": 800,
-        "height": 600,
-        "decorations": false
+        "height": 32,
+        "maxHeight": 32,
+        "minHeight": 32,
+        "minWidth": 720,
+        "transparent": true,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "closable": false,
+        "minimizable": false,
+        "maximizable": false
       }
     ],
     "security": {
