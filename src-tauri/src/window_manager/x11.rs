@@ -1,6 +1,4 @@
 use super::{WindowInfo, WindowManagerBackend};
-use base64::{engine::general_purpose::STANDARD, Engine as _};
-use image::{ImageBuffer, RgbaImage, ImageFormat};
 use std::collections::HashMap;
 use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex};
@@ -38,7 +36,6 @@ impl X11Manager {
         let names = [
             "_NET_CLIENT_LIST",
             "_NET_WM_NAME",
-            "_NET_WM_ICON",
             "_NET_WM_STATE",
             "_NET_WM_STATE_HIDDEN",
             "UTF8_STRING",
@@ -71,58 +68,33 @@ impl X11Manager {
         Ok(String::from_utf8_lossy(&reply.value).into_owned())
     }
 
-    fn get_window_icon(
+    fn get_window_class(
         &self,
-        win: Window,
-        atoms: &HashMap<&'static str, Atom>,
+        win: Window
     ) -> Result<String, Box<dyn std::error::Error>> {
         let cookie = self.conn.get_property(
             false,
             win,
-            atoms["_NET_WM_ICON"],
-            AtomEnum::CARDINAL,
+            AtomEnum::WM_CLASS,
+            AtomEnum::STRING,
             0,
             u32::MAX,
         )?;
         let reply = cookie.reply()?;
 
-        if let Some(icon_image) = self.parse_icon_data(&reply) {
-            // Convierte la imagen a PNG en memoria
-            let mut buffer = Vec::new();
-            let mut cursor = std::io::Cursor::new(&mut buffer);
-            icon_image.write_to(&mut cursor, ImageFormat::WebP)?;
-            // Codifica la imagen en base64
-            Ok(STANDARD.encode(&buffer))
-        } else {
-            Ok(String::new())
+        // Toma solo la segunda parte después del primer nulo
+    if let Some(data) = reply.value8() {
+        let data_vec: Vec<u8> = data.collect();
+        let utf8_string = String::from_utf8_lossy(&data_vec);
+        let parts: Vec<&str> = utf8_string.split('\0').collect();
+        if parts.len() > 1 {
+            return Ok(parts[0].to_string()); // Devuelve solo la clase
         }
     }
 
-    fn parse_icon_data(&self, reply: &GetPropertyReply) -> Option<RgbaImage> {
-        let mut data_iter = reply.value32()?; // Omite los primeros dos elementos (ancho y alto)
 
-        let width = data_iter.next()? as u32;
-        let height = data_iter.next()? as u32;
-        let mut icon_data = Vec::with_capacity((width * height) as usize);
-
-        for rgba in data_iter {
-            // Extrae los componentes RGBA
-            let alpha = ((rgba & 0xFF000000) >> 24) as u8;
-            let red = ((rgba & 0x00FF0000) >> 16) as u8;
-            let green = ((rgba & 0x0000FF00) >> 8) as u8;
-            let blue = (rgba & 0x000000FF) as u8;
-
-            icon_data.push(red);
-            icon_data.push(green);
-            icon_data.push(blue);
-            icon_data.push(alpha);
-        }
-
-        // Crea un buffer de imagen
-        RgbaImage::from_raw(width, height, icon_data)
+        Ok(String::from_utf8_lossy(&reply.value).into_owned())
     }
-
-    
 
     fn get_window_state(
         &self,
@@ -165,7 +137,7 @@ impl WindowManagerBackend for X11Manager {
         for win in windows {
             let title = self.get_window_title(win, &atoms)?;
             let state = self.get_window_state(win, &atoms)?;
-            let icon = self.get_window_icon(win, &atoms)?;
+            let icon = self.get_window_class(win)?;
 
             window_list.push(WindowInfo {
                 id: win.to_string(),
