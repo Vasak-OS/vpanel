@@ -27,17 +27,17 @@ impl WindowManagerBackend for WaylandManager {
         Ok(self.toplevels.clone())
     }
 
-    fn focus_window(&self, win_id: &str) -> Result<(), Box<dyn std::error::Error>> {
+    fn focus_window(&self, _win_id: &str) -> Result<(), Box<dyn std::error::Error>> {
         // Implementación para activar ventanas en Wayland
         Ok(())
     }
 
-    fn minimize_window(&self, win_id: &str) -> Result<(), Box<dyn std::error::Error>> {
+    fn minimize_window(&self, _win_id: &str) -> Result<(), Box<dyn std::error::Error>> {
         // Implementación para minimizar ventanas en Wayland
         Ok(())
     }
 
-    fn setup_event_monitoring(&mut self, tx: Sender<()>) -> Result<(), Box<dyn std::error::Error>> {
+    fn setup_event_monitoring(&mut self, _tx: Sender<()>) -> Result<(), Box<dyn std::error::Error>> {
         let manager = &mut self.manager;
 
         manager.dispatch_pending(&mut self.conn)?;

@@ -55,7 +55,7 @@ onUnmounted(async () => {
 });
 </script>
 <template>
-  <div>
+  <div class="flex">
     <div
       v-for="window in windows"
       :key="window.id"
@@ -63,14 +63,15 @@ onUnmounted(async () => {
       :class="{ 'opacity-50': window.is_minimized }"
       @click="focusWindow(window.id)"
     >
-      <img v-if="window.icon" :src="window.icon" class="w-4 h-4" alt="" />
+      <img v-if="window.icon" :src="`data:image/jpeg;charset=utf-8;base64,${window.icon}`" class="w-4 h-4 icon" alt="" />
       <span>{{ window.title }}</span>
-      <button
-        @click.stop="minimizeWindow(window.id)"
-        class="hover:bg-gray-600 p-1 rounded"
-      >
-        _
-      </button>
     </div>
   </div>
 </template>
+
+<style>
+.icon{
+  width: 26px;
+  height: 26px;
+}
+</style>

@@ -1,4 +1,6 @@
 use super::{WindowInfo, WindowManagerBackend};
+use base64::{engine::general_purpose::STANDARD, Engine as _};
+use image::{ImageBuffer, RgbaImage, ImageFormat};
 use std::collections::HashMap;
 use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex};
@@ -36,7 +38,7 @@ impl X11Manager {
         let names = [
             "_NET_CLIENT_LIST",
             "_NET_WM_NAME",
-            "_NET_WM_ICON_NAME",
+            "_NET_WM_ICON",
             "_NET_WM_STATE",
             "_NET_WM_STATE_HIDDEN",
             "UTF8_STRING",
@@ -77,15 +79,50 @@ impl X11Manager {
         let cookie = self.conn.get_property(
             false,
             win,
-            atoms["_NET_WM_ICON_NAME"],
+            atoms["_NET_WM_ICON"],
             AtomEnum::CARDINAL,
             0,
             u32::MAX,
         )?;
         let reply = cookie.reply()?;
 
-        Ok(String::from_utf8_lossy(&reply.value).into_owned())
+        if let Some(icon_image) = self.parse_icon_data(&reply) {
+            // Convierte la imagen a PNG en memoria
+            let mut buffer = Vec::new();
+            let mut cursor = std::io::Cursor::new(&mut buffer);
+            icon_image.write_to(&mut cursor, ImageFormat::WebP)?;
+            // Codifica la imagen en base64
+            Ok(STANDARD.encode(&buffer))
+        } else {
+            Ok(String::new())
+        }
     }
+
+    fn parse_icon_data(&self, reply: &GetPropertyReply) -> Option<RgbaImage> {
+        let mut data_iter = reply.value32()?; // Omite los primeros dos elementos (ancho y alto)
+
+        let width = data_iter.next()? as u32;
+        let height = data_iter.next()? as u32;
+        let mut icon_data = Vec::with_capacity((width * height) as usize);
+
+        for rgba in data_iter {
+            // Extrae los componentes RGBA
+            let alpha = ((rgba & 0xFF000000) >> 24) as u8;
+            let red = ((rgba & 0x00FF0000) >> 16) as u8;
+            let green = ((rgba & 0x0000FF00) >> 8) as u8;
+            let blue = (rgba & 0x000000FF) as u8;
+
+            icon_data.push(red);
+            icon_data.push(green);
+            icon_data.push(blue);
+            icon_data.push(alpha);
+        }
+
+        // Crea un buffer de imagen
+        RgbaImage::from_raw(width, height, icon_data)
+    }
+
+    
 
     fn get_window_state(
         &self,
@@ -129,8 +166,6 @@ impl WindowManagerBackend for X11Manager {
             let title = self.get_window_title(win, &atoms)?;
             let state = self.get_window_state(win, &atoms)?;
             let icon = self.get_window_icon(win, &atoms)?;
-
-            println!("{}: {:?}", title, icon);
 
             window_list.push(WindowInfo {
                 id: win.to_string(),
@@ -181,7 +216,7 @@ impl WindowManagerBackend for X11Manager {
     fn setup_event_monitoring(&mut self, tx: Sender<()>) -> Result<(), Box<dyn std::error::Error>> {
         let conn = self.conn.clone();
         let root = self.root;
-        let windows = self.windows.clone();
+        let _windows = self.windows.clone();
 
         let events = EventMask::STRUCTURE_NOTIFY
             | EventMask::PROPERTY_CHANGE
