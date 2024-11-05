@@ -4,7 +4,7 @@ use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
 
 #[tauri::command]
-pub fn get_icon_path(name: &str) -> Result<String, String> {
+pub fn get_icon_base64(name: &str) -> Result<String, String> {
     let themed = gtk::IconTheme::default().unwrap();
     let mut themed_icon = themed
         .lookup_icon(

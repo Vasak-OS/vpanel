@@ -79,7 +79,7 @@ pub fn run() {
             get_windows,
             focus_window,
             minimize_window,
-            icons::get_icon_path,
+            icons::get_icon_base64,
             icons::get_symbol_path
         ])
         .run(tauri::generate_context!())
