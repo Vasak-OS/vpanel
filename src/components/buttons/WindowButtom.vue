@@ -36,14 +36,10 @@ onMounted(async () => {
     :class="{ 'opacity-50': is_minimized }"
     @click="focusWindow(id)"
   >
-    <img v-if="icon" :src="`data:image/svg+xml;base64,${iconBase64}`" class="w-4 h-4 icon" :alt="title" />
-    <span>{{ title }}</span>
+    <img v-if="icon" :src="`data:image/svg+xml;base64,${iconBase64}`" class="w-6 h-6" :alt="title" />
+    <span class="hidden">{{ title }}</span>
   </div>
 </template>
 
 <style>
-.icon {
-  width: 26px;
-  height: 26px;
-}
 </style>

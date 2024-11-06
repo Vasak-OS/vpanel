@@ -15,7 +15,7 @@ import WindowsArea from './components/WindowsArea.vue';
 
 <template>
   <nav id="navale"> 
-    <img src="/usr/share/icons/Fluent/scalable/apps/menu-editor.svg" alt=""/>
+    <img src="/usr/share/icons/Fluent/scalable/apps/menu-editor.svg" alt="Menu" class="h-6 w-6"/>
     <WindowsArea />
     <SystemTrayComponent />
   </nav>
@@ -26,7 +26,7 @@ import WindowsArea from './components/WindowsArea.vue';
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0.5rem 1rem;
+  padding: 0 6px;
   background-color: rgba(0, 0, 0, 0.5);
   color: white;
 }
