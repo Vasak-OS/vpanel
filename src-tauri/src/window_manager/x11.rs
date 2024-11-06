@@ -210,10 +210,8 @@ impl WindowManagerBackend for X11Manager {
         let atoms: HashMap<&str, u32> = self.get_required_atoms()?;
         
         if self.is_window_focused(win, &atoms)? {
-            println!("Window is focused");
             self.minimize_window(win, &atoms)?;
         } else {
-            println!("Window is not focused");
             self.focus_window(win, &atoms)?;
         }
 
