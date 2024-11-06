@@ -1,7 +1,6 @@
 use super::{WindowInfo, WindowManagerBackend};
 use std::collections::HashMap;
 use std::sync::mpsc::Sender;
-use std::error::Error;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use x11rb::connection::Connection;
@@ -70,10 +69,7 @@ impl X11Manager {
         Ok(String::from_utf8_lossy(&reply.value).into_owned())
     }
 
-    fn get_window_class(
-        &self,
-        win: Window
-    ) -> Result<String, Box<dyn std::error::Error>> {
+    fn get_window_class(&self, win: Window) -> Result<String, Box<dyn std::error::Error>> {
         let cookie = self.conn.get_property(
             false,
             win,
@@ -85,15 +81,14 @@ impl X11Manager {
         let reply = cookie.reply()?;
 
         // Toma solo la segunda parte después del primer nulo
-    if let Some(data) = reply.value8() {
-        let data_vec: Vec<u8> = data.collect();
-        let utf8_string = String::from_utf8_lossy(&data_vec);
-        let parts: Vec<&str> = utf8_string.split('\0').collect();
-        if parts.len() > 1 {
-            return Ok(parts[0].to_string()); // Devuelve solo la clase
+        if let Some(data) = reply.value8() {
+            let data_vec: Vec<u8> = data.collect();
+            let utf8_string = String::from_utf8_lossy(&data_vec);
+            let parts: Vec<&str> = utf8_string.split('\0').collect();
+            if parts.len() > 1 {
+                return Ok(parts[0].to_string()); // Devuelve solo la clase
+            }
         }
-    }
-
 
         Ok(String::from_utf8_lossy(&reply.value).into_owned())
     }
@@ -119,22 +114,36 @@ impl X11Manager {
             .unwrap_or_default())
     }
 
-    fn is_window_focused(&self, window: Window, atoms: &HashMap<&str, u32>) -> Result<bool, Box<dyn Error>> {
+    fn is_window_focused(
+        &self,
+        window: Window,
+        atoms: &HashMap<&str, u32>,
+    ) -> Result<bool, Box<dyn std::error::Error>> {
         let net_active_window_atom = atoms["_NET_ACTIVE_WINDOW"];
-        let active_window_reply = self.conn.get_property(
-            false,
-            self.conn.setup().roots[0].root,
-            net_active_window_atom,
-            AtomEnum::WINDOW,
-            0,
-            1,
-        )?.reply()?;
+        let active_window_reply = self
+            .conn
+            .get_property(
+                false,
+                self.conn.setup().roots[0].root,
+                net_active_window_atom,
+                AtomEnum::WINDOW,
+                0,
+                1,
+            )?
+            .reply()?;
 
         // Verificar si la ventana actual está en foco
-        Ok(active_window_reply.value32().map(|mut v| v.next() == Some(window)).unwrap_or(false))
+        Ok(active_window_reply
+            .value32()
+            .map(|mut v| v.next() == Some(window))
+            .unwrap_or(false))
     }
 
-    fn minimize_window(&self, window: Window, atoms: &HashMap<&str, u32>) -> Result<(), Box<dyn Error>> {
+    fn minimize_window(
+        &self,
+        window: Window,
+        atoms: &HashMap<&str, u32>,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let net_wm_state_atom = atoms["_NET_WM_STATE"];
         let net_wm_state_hidden_atom = atoms["_NET_WM_STATE_HIDDEN"];
         let root = self.conn.setup().roots[0].root;
@@ -149,12 +158,21 @@ impl X11Manager {
             sequence: 0,
         };
 
-        self.conn.send_event(false, root, EventMask::SUBSTRUCTURE_REDIRECT | EventMask::SUBSTRUCTURE_NOTIFY, event)?;
+        self.conn.send_event(
+            false,
+            root,
+            EventMask::SUBSTRUCTURE_REDIRECT | EventMask::SUBSTRUCTURE_NOTIFY,
+            event,
+        )?;
         Ok(())
     }
 
     /// Lleva la ventana al foco
-    fn focus_window(&self, window: Window, atoms: &HashMap<&str, u32>) -> Result<(), Box<dyn Error>> {
+    fn focus_window(
+        &self,
+        window: Window,
+        atoms: &HashMap<&str, u32>,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let net_active_window_atom = atoms["_NET_ACTIVE_WINDOW"];
         let root = self.conn.setup().roots[0].root;
 
@@ -168,7 +186,12 @@ impl X11Manager {
             sequence: 0,
         };
 
-        self.conn.send_event(false, root, EventMask::SUBSTRUCTURE_REDIRECT | EventMask::SUBSTRUCTURE_NOTIFY, event)?;
+        self.conn.send_event(
+            false,
+            root,
+            EventMask::SUBSTRUCTURE_REDIRECT | EventMask::SUBSTRUCTURE_NOTIFY,
+            event,
+        )?;
         Ok(())
     }
 }
@@ -208,7 +231,7 @@ impl WindowManagerBackend for X11Manager {
     fn toggle_window(&self, win_id: &str) -> Result<(), Box<dyn std::error::Error>> {
         let win = win_id.parse::<u32>()?;
         let atoms: HashMap<&str, u32> = self.get_required_atoms()?;
-        
+
         if self.is_window_focused(win, &atoms)? {
             self.minimize_window(win, &atoms)?;
         } else {

@@ -52,13 +52,13 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .setup(move |app| {
             let app_handle = app.handle().clone();
-            
+
             std::thread::spawn(move || {
                 for _ in rx {
                     let _ = tauri::Emitter::emit(&app_handle, "window-update", ());
                 }
             });
-            
+
             Ok(())
         })
         //.invoke_handler(tauri::generate_handler![icons::get_icon])

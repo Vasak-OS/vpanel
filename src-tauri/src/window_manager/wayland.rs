@@ -32,7 +32,10 @@ impl WindowManagerBackend for WaylandManager {
         Ok(())
     }
 
-    fn setup_event_monitoring(&mut self, _tx: Sender<()>) -> Result<(), Box<dyn std::error::Error>> {
+    fn setup_event_monitoring(
+        &mut self,
+        _tx: Sender<()>,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let manager = &mut self.manager;
 
         manager.dispatch_pending(&mut self.conn)?;
