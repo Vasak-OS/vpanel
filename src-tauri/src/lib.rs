@@ -80,7 +80,7 @@ pub fn run() {
             focus_window,
             minimize_window,
             icons::get_icon_base64,
-            icons::get_symbol_path
+            icons::get_symbol_base64
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
