@@ -21,25 +21,12 @@ async fn get_windows(state: tauri::State<'_, AppState>) -> Result<Vec<WindowInfo
 }
 
 #[tauri::command]
-async fn focus_window(window_id: String, state: tauri::State<'_, AppState>) -> Result<(), String> {
+async fn toggle_window(window_id: String, state: tauri::State<'_, AppState>) -> Result<(), String> {
     state
         .window_manager
         .lock()
         .map_err(|e| e.to_string())?
-        .focus_window(&window_id)
-        .map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-async fn minimize_window(
-    window_id: String,
-    state: tauri::State<'_, AppState>,
-) -> Result<(), String> {
-    state
-        .window_manager
-        .lock()
-        .map_err(|e| e.to_string())?
-        .minimize_window(&window_id)
+        .toggle_window(&window_id)
         .map_err(|e| e.to_string())
 }
 
@@ -77,8 +64,7 @@ pub fn run() {
         //.invoke_handler(tauri::generate_handler![icons::get_icon])
         .invoke_handler(tauri::generate_handler![
             get_windows,
-            focus_window,
-            minimize_window,
+            toggle_window,
             icons::get_icon_base64,
             icons::get_symbol_base64
         ])

@@ -1,6 +1,7 @@
 use super::{WindowInfo, WindowManagerBackend};
 use std::collections::HashMap;
 use std::sync::mpsc::Sender;
+use std::error::Error;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use x11rb::connection::Connection;
@@ -39,6 +40,7 @@ impl X11Manager {
             "_NET_WM_STATE",
             "_NET_WM_STATE_HIDDEN",
             "UTF8_STRING",
+            "_NET_ACTIVE_WINDOW",
         ];
 
         for name in names.iter() {
@@ -116,6 +118,59 @@ impl X11Manager {
             .map(|iter| iter.collect())
             .unwrap_or_default())
     }
+
+    fn is_window_focused(&self, window: Window, atoms: &HashMap<&str, u32>) -> Result<bool, Box<dyn Error>> {
+        let net_active_window_atom = atoms["_NET_ACTIVE_WINDOW"];
+        let active_window_reply = self.conn.get_property(
+            false,
+            self.conn.setup().roots[0].root,
+            net_active_window_atom,
+            AtomEnum::WINDOW,
+            0,
+            1,
+        )?.reply()?;
+
+        // Verificar si la ventana actual está en foco
+        Ok(active_window_reply.value32().map(|mut v| v.next() == Some(window)).unwrap_or(false))
+    }
+
+    fn minimize_window(&self, window: Window, atoms: &HashMap<&str, u32>) -> Result<(), Box<dyn Error>> {
+        let net_wm_state_atom = atoms["_NET_WM_STATE"];
+        let net_wm_state_hidden_atom = atoms["_NET_WM_STATE_HIDDEN"];
+        let root = self.conn.setup().roots[0].root;
+
+        // Crear y enviar el evento de minimización
+        let event = ClientMessageEvent {
+            response_type: x11rb::protocol::xproto::CLIENT_MESSAGE_EVENT,
+            format: 32,
+            window,
+            type_: net_wm_state_atom,
+            data: [1, net_wm_state_hidden_atom, 0, 0, 0].into(),
+            sequence: 0,
+        };
+
+        self.conn.send_event(false, root, EventMask::SUBSTRUCTURE_REDIRECT | EventMask::SUBSTRUCTURE_NOTIFY, event)?;
+        Ok(())
+    }
+
+    /// Lleva la ventana al foco
+    fn focus_window(&self, window: Window, atoms: &HashMap<&str, u32>) -> Result<(), Box<dyn Error>> {
+        let net_active_window_atom = atoms["_NET_ACTIVE_WINDOW"];
+        let root = self.conn.setup().roots[0].root;
+
+        // Crear y enviar el evento para traer la ventana al foco
+        let event = ClientMessageEvent {
+            response_type: x11rb::protocol::xproto::CLIENT_MESSAGE_EVENT,
+            format: 32,
+            window,
+            type_: net_active_window_atom,
+            data: [1, 0, 0, 0, 0].into(),
+            sequence: 0,
+        };
+
+        self.conn.send_event(false, root, EventMask::SUBSTRUCTURE_REDIRECT | EventMask::SUBSTRUCTURE_NOTIFY, event)?;
+        Ok(())
+    }
 }
 
 impl WindowManagerBackend for X11Manager {
@@ -150,38 +205,18 @@ impl WindowManagerBackend for X11Manager {
         Ok(window_list)
     }
 
-    fn focus_window(&self, win_id: &str) -> Result<(), Box<dyn std::error::Error>> {
+    fn toggle_window(&self, win_id: &str) -> Result<(), Box<dyn std::error::Error>> {
         let win = win_id.parse::<u32>()?;
-        self.conn
-            .set_input_focus(InputFocus::PARENT, win, x11rb::CURRENT_TIME)?;
-        self.conn.flush()?;
-        Ok(())
-    }
+        let atoms: HashMap<&str, u32> = self.get_required_atoms()?;
+        
+        if self.is_window_focused(win, &atoms)? {
+            println!("Window is focused");
+            self.minimize_window(win, &atoms)?;
+        } else {
+            println!("Window is not focused");
+            self.focus_window(win, &atoms)?;
+        }
 
-    fn minimize_window(&self, win_id: &str) -> Result<(), Box<dyn std::error::Error>> {
-        let win = win_id.parse::<u32>()?;
-        let atoms = self.get_required_atoms()?;
-
-        let event = ClientMessageEvent::new(
-            32,
-            win,
-            atoms["_NET_WM_STATE"],
-            [
-                1, // _NET_WM_STATE_ADD
-                atoms["_NET_WM_STATE_HIDDEN"] as u32,
-                0,
-                0,
-                0,
-            ],
-        );
-
-        self.conn.send_event(
-            false,
-            self.root,
-            EventMask::SUBSTRUCTURE_REDIRECT | EventMask::SUBSTRUCTURE_NOTIFY,
-            event,
-        )?;
-        self.conn.flush()?;
         Ok(())
     }
 
@@ -195,7 +230,6 @@ impl WindowManagerBackend for X11Manager {
             | EventMask::SUBSTRUCTURE_NOTIFY;
 
         conn.change_window_attributes(root, &ChangeWindowAttributesAux::new().event_mask(events))?;
-        conn.flush()?;
 
         thread::spawn(move || loop {
             if let Ok(event) = conn.wait_for_event() {

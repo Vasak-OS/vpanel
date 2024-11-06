@@ -27,13 +27,8 @@ impl WindowManagerBackend for WaylandManager {
         Ok(self.toplevels.clone())
     }
 
-    fn focus_window(&self, _win_id: &str) -> Result<(), Box<dyn std::error::Error>> {
-        // Implementación para activar ventanas en Wayland
-        Ok(())
-    }
-
-    fn minimize_window(&self, _win_id: &str) -> Result<(), Box<dyn std::error::Error>> {
-        // Implementación para minimizar ventanas en Wayland
+    fn toggle_window(&self, _win_id: &str) -> Result<(), Box<dyn std::error::Error>> {
+        // Implementación para alternar ventanas en Wayland
         Ok(())
     }
 

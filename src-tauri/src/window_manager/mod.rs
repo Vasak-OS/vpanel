@@ -16,9 +16,8 @@ pub struct WindowInfo {
 
 pub trait WindowManagerBackend {
     fn get_window_list(&self) -> Result<Vec<WindowInfo>, Box<dyn std::error::Error>>;
-    fn focus_window(&self, win_id: &str) -> Result<(), Box<dyn std::error::Error>>;
-    fn minimize_window(&self, win_id: &str) -> Result<(), Box<dyn std::error::Error>>;
     fn setup_event_monitoring(&mut self, tx: Sender<()>) -> Result<(), Box<dyn std::error::Error>>;
+    fn toggle_window(&self, win_id: &str) -> Result<(), Box<dyn std::error::Error>>;
 }
 
 pub struct WindowManager {
@@ -48,11 +47,7 @@ impl WindowManager {
         self.backend.get_window_list()
     }
 
-    pub fn focus_window(&self, win_id: &str) -> Result<(), Box<dyn std::error::Error>> {
-        self.backend.focus_window(win_id)
-    }
-
-    pub fn minimize_window(&self, win_id: &str) -> Result<(), Box<dyn std::error::Error>> {
-        self.backend.minimize_window(win_id)
+    pub fn toggle_window(&self, win_id: &str) -> Result<(), Box<dyn std::error::Error>> {
+        self.backend.toggle_window(win_id)
     }
 }

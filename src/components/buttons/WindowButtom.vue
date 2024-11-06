@@ -20,9 +20,9 @@ const { id, title, is_minimized, icon } = defineProps({
 
 const focusWindow = async (windowId: string) => {
   try {
-    await invoke("focus_window", { windowId });
+    await invoke("toggle_window", { windowId });
   } catch (error) {
-    console.error("Error focusing window:", error);
+    console.error("Error toggling window:", error);
   }
 };
 
@@ -37,7 +37,6 @@ onMounted(async () => {
     @click="focusWindow(id)"
   >
     <img v-if="icon" :src="`data:image/svg+xml;base64,${iconBase64}`" class="w-6 h-6" :alt="title" />
-    <span class="hidden">{{ title }}</span>
   </div>
 </template>
 
