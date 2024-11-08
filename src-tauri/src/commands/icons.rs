@@ -30,12 +30,11 @@ pub fn get_icon_base64(name: &str) -> Result<String, String> {
 pub fn get_symbol_base64(name: &str) -> Result<String, String> {
     let themed = gtk::IconTheme::default().unwrap();
 
-    let mut themed_icon = themed
-        .lookup_icon(
-            name,
-            64,
-            gtk::IconLookupFlags::FORCE_SYMBOLIC | gtk::IconLookupFlags::FORCE_SVG,
-        );
+    let mut themed_icon = themed.lookup_icon(
+        name,
+        64,
+        gtk::IconLookupFlags::FORCE_SYMBOLIC | gtk::IconLookupFlags::FORCE_SVG,
+    );
 
     if themed_icon == None {
         themed_icon = themed.lookup_icon(
