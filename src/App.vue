@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { onMounted } from "vue";
+import { setPanelProperties } from "./common/window";
 import SystemTrayComponent from './components/SystemTrayComponent.vue';
 import WindowsArea from './components/WindowsArea.vue';
 // import { ref } from "vue";
@@ -11,6 +13,9 @@ import WindowsArea from './components/WindowsArea.vue';
 //   // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 //   greetMsg.value = await invoke("greet", { name: name.value });
 // }
+onMounted(() => {
+  setPanelProperties();
+});
 </script>
 
 <template>
