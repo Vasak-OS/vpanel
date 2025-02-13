@@ -16,24 +16,19 @@ pub struct X11Manager {
 impl X11Manager {
     pub fn new() -> Result<Self, Box<dyn std::error::Error>> {
         let (conn, screen_num) = x11rb::connect(None)?;
+        let root = conn.setup().roots[screen_num].root;
         let conn = Arc::new(conn);
-        let setup = conn.setup();
-        let screen = &setup.roots[screen_num];
-        let root = screen.root;
-        let windows = Arc::new(Mutex::new(HashMap::new()));
-
+        
         Ok(X11Manager {
             conn,
             root,
-            windows,
+            windows: Arc::new(Mutex::new(HashMap::new())),
         })
     }
 
-    fn get_required_atoms(
-        &self,
-    ) -> Result<HashMap<&'static str, Atom>, Box<dyn std::error::Error>> {
-        let mut atoms = HashMap::new();
-        let names = [
+    // Funciones auxiliares para manejo de átomos y propiedades de ventanas
+    fn get_required_atoms(&self) -> Result<HashMap<&'static str, Atom>, Box<dyn std::error::Error>> {
+        let atom_names = [
             "_NET_CLIENT_LIST",
             "_NET_WM_NAME",
             "_NET_WM_STATE",
@@ -42,31 +37,41 @@ impl X11Manager {
             "_NET_ACTIVE_WINDOW",
         ];
 
-        for name in names.iter() {
-            let cookie = self.conn.intern_atom(false, name.as_bytes())?;
-            let reply = cookie.reply()?;
+        let mut atoms = HashMap::new();
+        for name in atom_names.iter() {
+            let reply = self.conn.intern_atom(false, name.as_bytes())?.reply()?;
             atoms.insert(*name, reply.atom);
         }
-
         Ok(atoms)
     }
 
-    fn get_window_title(
-        &self,
-        win: Window,
-        atoms: &HashMap<&'static str, Atom>,
-    ) -> Result<String, Box<dyn std::error::Error>> {
-        let cookie = self.conn.get_property(
+    // Funciones principales de gestión de ventanas
+    fn get_window_title(&self, win: Window, atoms: &HashMap<&str, Atom>) 
+        -> Result<String, Box<dyn std::error::Error>> {
+        let reply = self.conn.get_property(
             false,
             win,
             atoms["_NET_WM_NAME"],
             atoms["UTF8_STRING"],
             0,
             u32::MAX,
-        )?;
-        let reply = cookie.reply()?;
+        )?.reply()?;
 
         Ok(String::from_utf8_lossy(&reply.value).into_owned())
+    }
+
+    fn get_window_state(&self, win: Window, atoms: &HashMap<&str, Atom>) 
+        -> Result<Vec<Atom>, Box<dyn std::error::Error>> {
+        let reply = self.conn.get_property(
+            false,
+            win,
+            atoms["_NET_WM_STATE"],
+            AtomEnum::ATOM,
+            0,
+            u32::MAX,
+        )?.reply()?;
+
+        Ok(reply.value32().map(|iter| iter.collect()).unwrap_or_default())
     }
 
     fn get_window_class(&self, win: Window) -> Result<String, Box<dyn std::error::Error>> {
@@ -80,38 +85,16 @@ impl X11Manager {
         )?;
         let reply = cookie.reply()?;
 
-        // Toma solo la segunda parte después del primer nulo
         if let Some(data) = reply.value8() {
             let data_vec: Vec<u8> = data.collect();
             let utf8_string = String::from_utf8_lossy(&data_vec);
             let parts: Vec<&str> = utf8_string.split('\0').collect();
             if parts.len() > 1 {
-                return Ok(parts[0].to_string()); // Devuelve solo la clase
+                return Ok(parts[0].to_string());
             }
         }
 
-        Ok(String::from_utf8_lossy(&reply.value).into_owned())
-    }
-
-    fn get_window_state(
-        &self,
-        win: Window,
-        atoms: &HashMap<&'static str, Atom>,
-    ) -> Result<Vec<Atom>, Box<dyn std::error::Error>> {
-        let cookie = self.conn.get_property(
-            false,
-            win,
-            atoms["_NET_WM_STATE"],
-            AtomEnum::ATOM,
-            0,
-            u32::MAX,
-        )?;
-        let reply = cookie.reply()?;
-
-        Ok(reply
-            .value32()
-            .map(|iter| iter.collect())
-            .unwrap_or_default())
+        Ok(String::new())
     }
 
     fn is_window_focused(
@@ -199,29 +182,27 @@ impl X11Manager {
 impl WindowManagerBackend for X11Manager {
     fn get_window_list(&self) -> Result<Vec<WindowInfo>, Box<dyn std::error::Error>> {
         let atoms = self.get_required_atoms()?;
-        let cookie = self.conn.get_property(
+        let reply = self.conn.get_property(
             false,
             self.root,
             atoms["_NET_CLIENT_LIST"],
             AtomEnum::WINDOW,
             0,
             u32::MAX,
-        )?;
-        let reply = cookie.reply()?;
+        )?.reply()?;
 
         let windows: Vec<Window> = reply.value32().map_or_else(Vec::new, |iter| iter.collect());
-
         let mut window_list = Vec::new();
+
         for win in windows {
             let title = self.get_window_title(win, &atoms)?;
             let state = self.get_window_state(win, &atoms)?;
-            let icon = self.get_window_class(win)?;
-
+            
             window_list.push(WindowInfo {
                 id: win.to_string(),
                 title,
                 is_minimized: state.contains(&atoms["_NET_WM_STATE_HIDDEN"]),
-                icon,
+                icon: self.get_window_class(win)?,
             });
         }
 
@@ -230,30 +211,42 @@ impl WindowManagerBackend for X11Manager {
 
     fn toggle_window(&self, win_id: &str) -> Result<(), Box<dyn std::error::Error>> {
         let win = win_id.parse::<u32>()?;
-        let atoms: HashMap<&str, u32> = self.get_required_atoms()?;
+        let atoms = self.get_required_atoms()?;
+        let root = self.conn.setup().roots[0].root;
 
-        if self.is_window_focused(win, &atoms)? {
-            self.minimize_window(win, &atoms)?;
-        } else {
-            self.focus_window(win, &atoms)?;
-        }
+        // Evento para alternar el estado de la ventana
+        let event = ClientMessageEvent {
+            response_type: CLIENT_MESSAGE_EVENT,
+            format: 32,
+            window: win,
+            type_: atoms["_NET_ACTIVE_WINDOW"],
+            data: [1, 0, 0, 0, 0].into(),
+            sequence: 0,
+        };
+
+        self.conn.send_event(
+            false,
+            root,
+            EventMask::SUBSTRUCTURE_REDIRECT | EventMask::SUBSTRUCTURE_NOTIFY,
+            event,
+        )?;
 
         Ok(())
     }
 
     fn setup_event_monitoring(&mut self, tx: Sender<()>) -> Result<(), Box<dyn std::error::Error>> {
         let conn = self.conn.clone();
-        let root = self.root;
-        let _windows = self.windows.clone();
-
         let events = EventMask::STRUCTURE_NOTIFY
             | EventMask::PROPERTY_CHANGE
             | EventMask::SUBSTRUCTURE_NOTIFY;
 
-        conn.change_window_attributes(root, &ChangeWindowAttributesAux::new().event_mask(events))?;
+        conn.change_window_attributes(
+            self.root,
+            &ChangeWindowAttributesAux::new().event_mask(events),
+        )?;
 
-        thread::spawn(move || loop {
-            if let Ok(event) = conn.wait_for_event() {
+        thread::spawn(move || {
+            while let Ok(event) = conn.wait_for_event() {
                 match event {
                     Event::CreateNotify(_) | Event::DestroyNotify(_) | Event::PropertyNotify(_) => {
                         let _ = tx.send(());

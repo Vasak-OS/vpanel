@@ -12,11 +12,10 @@ impl WaylandManager {
     pub fn new() -> Result<Self, Box<dyn std::error::Error>> {
         let conn = Connection::connect_to_env()?;
         let event_queue = conn.new_event_queue();
-        let read_guard = event_queue;
 
         Ok(WaylandManager {
             conn,
-            manager: read_guard,
+            manager: event_queue,
             toplevels: Vec::new(),
         })
     }
@@ -27,19 +26,12 @@ impl WindowManagerBackend for WaylandManager {
         Ok(self.toplevels.clone())
     }
 
-    fn toggle_window(&self, _win_id: &str) -> Result<(), Box<dyn std::error::Error>> {
-        // Implementación para alternar ventanas en Wayland
+    fn setup_event_monitoring(&mut self, _tx: Sender<()>) -> Result<(), Box<dyn std::error::Error>> {
+        self.manager.dispatch_pending(&mut self.conn)?;
         Ok(())
     }
 
-    fn setup_event_monitoring(
-        &mut self,
-        _tx: Sender<()>,
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        let manager = &mut self.manager;
-
-        manager.dispatch_pending(&mut self.conn)?;
-
+    fn toggle_window(&self, _win_id: &str) -> Result<(), Box<dyn std::error::Error>> {
         Ok(())
     }
 }
