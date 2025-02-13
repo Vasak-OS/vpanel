@@ -6,7 +6,7 @@ mod window_manager;
 use gtk::prelude::*;
 use std::sync::mpsc::channel;
 use std::sync::{Arc, Mutex};
-use tauri::Manager;
+use tauri::{Manager, Emitter};
 use tauri_plugin_positioner::{Position, WindowExt};
 use window_manager::{WindowInfo, WindowManager};
 //use strut_manager::StrutManager;
@@ -38,9 +38,44 @@ async fn toggle_window(window_id: String, state: tauri::State<'_, AppState>) -> 
         .map_err(|e| e.to_string())
 }
 
+// Configuración de la ventana principal
+fn setup_main_window(window: &tauri::WebviewWindow) -> Result<(), Box<dyn std::error::Error>> {
+    let gtk_window = window.gtk_window()?;
+    let _ = window.move_window(Position::BottomLeft);
+
+    gtk_window.set_resizable(false);
+    gtk_window.set_type_hint(gtk::gdk::WindowTypeHint::Dock);
+    gtk_window.set_urgency_hint(true);
+    gtk_window.set_skip_taskbar_hint(true);
+    gtk_window.set_skip_pager_hint(true);
+    gtk_window.set_keep_above(true);
+    gtk_window.stick();
+
+    Ok(())
+}
+
+// Configuración del monitoreo de eventos
+fn setup_event_monitoring(
+    window_manager: Arc<Mutex<WindowManager>>,
+    app_handle: tauri::AppHandle,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let (tx, rx) = channel();
+    
+    if let Ok(mut wm) = window_manager.lock() {
+        wm.backend.setup_event_monitoring(tx)?;
+    }
+
+    std::thread::spawn(move || {
+        for _ in rx {
+            let _ = app_handle.emit("window-update", ());
+        }
+    });
+
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    // Inicialización del window manager
     let window_manager = Arc::new(Mutex::new(
         WindowManager::new().expect("Failed to initialize window manager")
     ));
@@ -49,51 +84,22 @@ pub fn run() {
         window_manager: window_manager.clone(),//strut_manager: strut_manager.clone(),
     };
 
-    // Configuración del canal para eventos de ventana
-    let (tx, rx) = channel();
-    let wm = window_manager.clone();
-
-    std::thread::spawn(move || {
-        if let Ok(mut wm) = wm.lock() {
-            let _ = wm.backend.setup_event_monitoring(tx);
-        }
-    });
-
-    // Configuración de Tauri
     tauri::Builder::default()
         .manage(app_state)
         .plugin(tauri_plugin_positioner::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
-            let _ = app
-                .get_webview_window("main")
-                .expect("no main window")
-                .set_focus();
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.set_focus();
+            }
         }))
         .setup(move |app| {
-            let app_handle = app.handle().clone();
-            let window = app_handle.get_webview_window("main").unwrap();
-            let gtk_window = window.gtk_window().unwrap();
+            let window = app
+                .get_webview_window("main")
+                .expect("main window not found");
 
-            // Configuración de la ventana principal
-            let _ = window.as_ref().window().move_window(Position::BottomLeft);
-            gtk_window.set_resizable(false);
-            gtk_window.set_type_hint(gtk::gdk::WindowTypeHint::Dock);
-            gtk_window.set_urgency_hint(true);
-            gtk_window.set_skip_taskbar_hint(true);
-            gtk_window.set_skip_pager_hint(true);
-            gtk_window.set_keep_above(true);
-            gtk_window.stick();
-
-            // Manejador de eventos de actualización de ventana
-            {
-                let app_handle = app_handle.clone();
-                std::thread::spawn(move || {
-                    for _ in rx {
-                        let _ = tauri::Emitter::emit(&app_handle, "window-update", ());
-                    }
-                });
-            }
+            setup_main_window(&window)?;
+            setup_event_monitoring(window_manager.clone(), app.handle().clone())?;
 
             Ok(())
         })
