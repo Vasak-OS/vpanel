@@ -2,23 +2,22 @@
 mod icons;
 mod window_manager;
 //mod strut_manager;
-mod systemtray_manager;
 
 use gtk::prelude::*;
 use std::sync::mpsc::channel;
 use std::sync::{Arc, Mutex};
-use systemtray_manager::{SystemTrayManager, TrayIcon};
 use tauri::Manager;
 use tauri_plugin_positioner::{Position, WindowExt};
 use window_manager::{WindowInfo, WindowManager};
 //use strut_manager::StrutManager;
 
+// Estado principal de la aplicación
 struct AppState {
     window_manager: Arc<Mutex<WindowManager>>,
-    system_tray_manager: Arc<Mutex<SystemTrayManager>>,
     //strut_manager: Arc<Mutex<StrutManager>>,
 }
 
+// Comandos de la API
 #[tauri::command]
 async fn get_windows(state: tauri::State<'_, AppState>) -> Result<Vec<WindowInfo>, String> {
     state
@@ -39,32 +38,19 @@ async fn toggle_window(window_id: String, state: tauri::State<'_, AppState>) -> 
         .map_err(|e| e.to_string())
 }
 
-#[tauri::command]
-async fn get_tray_icons(state: tauri::State<'_, AppState>) -> Result<Vec<TrayIcon>, String> {
-    state
-        .system_tray_manager
-        .lock()
-        .map_err(|e| e.to_string())?
-        .get_tray_icons()
-        .map_err(|e| e.to_string())
-}
-
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let window_manager = WindowManager::new().expect("Failed to initialize window manager");
-    let window_manager = Arc::new(Mutex::new(window_manager));
-    let system_tray_manager = Arc::new(Mutex::new(
-        SystemTrayManager::new().expect("Failed to initialize system tray manager"),
+    // Inicialización del window manager
+    let window_manager = Arc::new(Mutex::new(
+        WindowManager::new().expect("Failed to initialize window manager")
     ));
-    //let strut_manager = Arc::new(Mutex::new(StrutManager::new()));
 
     let app_state = AppState {
-        window_manager: window_manager.clone(),
-        system_tray_manager: system_tray_manager.clone(),
-        //strut_manager: strut_manager.clone(),
+        window_manager: window_manager.clone(),//strut_manager: strut_manager.clone(),
     };
+
+    // Configuración del canal para eventos de ventana
     let (tx, rx) = channel();
-    let (tray_tx, tray_rx): (std::sync::mpsc::Sender<()>, std::sync::mpsc::Receiver<()>) = channel();
     let wm = window_manager.clone();
 
     std::thread::spawn(move || {
@@ -73,6 +59,7 @@ pub fn run() {
         }
     });
 
+    // Configuración de Tauri
     tauri::Builder::default()
         .manage(app_state)
         .plugin(tauri_plugin_positioner::init())
@@ -88,28 +75,22 @@ pub fn run() {
             let window = app_handle.get_webview_window("main").unwrap();
             let gtk_window = window.gtk_window().unwrap();
 
+            // Configuración de la ventana principal
             let _ = window.as_ref().window().move_window(Position::BottomLeft);
             gtk_window.set_resizable(false);
             gtk_window.set_type_hint(gtk::gdk::WindowTypeHint::Dock);
+            gtk_window.set_urgency_hint(true);
+            gtk_window.set_skip_taskbar_hint(true);
+            gtk_window.set_skip_pager_hint(true);
             gtk_window.set_keep_above(true);
             gtk_window.stick();
 
-            // Window update events
+            // Manejador de eventos de actualización de ventana
             {
                 let app_handle = app_handle.clone();
                 std::thread::spawn(move || {
                     for _ in rx {
                         let _ = tauri::Emitter::emit(&app_handle, "window-update", ());
-                    }
-                });
-            }
-
-            // System tray update events
-            {
-                let app_handle = app_handle.clone();
-                std::thread::spawn(move || {
-                    for _ in tray_rx {
-                        let _ = tauri::Emitter::emit(&app_handle, "tray-update", ());
                     }
                 });
             }
@@ -120,7 +101,6 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             get_windows,
             toggle_window,
-            get_tray_icons,
             icons::get_icon_base64,
             icons::get_symbol_base64
         ])
