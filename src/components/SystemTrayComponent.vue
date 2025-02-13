@@ -15,7 +15,7 @@ let unlisten: (() => void) | null = null;
 
 const refreshTrayIcons = async () => {
   try {
-    trayIcons.value = await invoke("get_tray_icons");
+    trayIcons.value = await invoke("get_tray_items");
     console.info("Tray icons:", trayIcons.value);
   } catch (error) {
     console.error("Error fetching tray icons:", error);
