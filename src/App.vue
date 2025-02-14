@@ -3,6 +3,7 @@ import { onMounted } from "vue";
 import { setPanelProperties } from "@/common/window";
 import WindowsArea from '@/components/WindowsArea.vue';
 import TrayPanel from '@/components/TrayPanel.vue';
+import ClockComponent from '@/components/ClockComponent.vue';
 
 onMounted(async () => {
   await setPanelProperties();
@@ -17,7 +18,10 @@ onMounted(async () => {
       class="menu-icon"
     />
     <WindowsArea />
-    <TrayPanel />
+    <div class="right-section">
+      <TrayPanel />
+      <ClockComponent />
+    </div>
   </nav>
 </template>
 
@@ -27,12 +31,18 @@ onMounted(async () => {
   justify-content: space-between;
   align-items: center;
   padding: 0 2px;
-  margin: 0 2px ;
+  margin: 0 2px;
   background-color: rgba(0, 0, 0, 0.5);
   color: white;
   height: 30px;
   border-radius: 12px;
   backdrop-filter: blur(10px);
+}
+
+.right-section {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .menu-icon {

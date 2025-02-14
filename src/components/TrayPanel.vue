@@ -45,6 +45,7 @@ const handleTrayClick = async (item: TrayItem, event: MouseEvent) => {
 onMounted(async () => {
   await refreshTrayItems();
   unlisten = await listen("tray-update", refreshTrayItems);
+  console.log(trayItems.value);
 });
 
 onUnmounted(() => {
