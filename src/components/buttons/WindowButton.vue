@@ -58,17 +58,23 @@ onMounted(async () => {
 
 <template>
   <div
-    class="flex items-center justify-center w-10 h-10 cursor-pointer transition-all duration-200 rounded-lg hover:bg-white/10 hover:scale-130"
-    :class="{ 'opacity-50': is_minimized }"
+    class="group flex items-center justify-center w-10 h-10 cursor-pointer transform transition-all duration-300 rounded-lg hover:bg-white/10 hover:scale-110 active:scale-95 relative"
+    :class="{ 'opacity-50 hover:opacity-90': is_minimized }"
     @click="toggleWindow"
   >
     <img 
       v-if="icon && iconBase64" 
       :src="`data:${getImageType(iconBase64)};base64,${iconBase64}`" 
       :alt="title"
-      class="w-6 h-6"
+      class="w-6 h-6 transition-all duration-300 group-hover:rotate-3 group-hover:brightness-110"
     />
-    <div v-else class="w-6 h-6 bg-gray-500/50 rounded-md" />
+    <div 
+      v-else 
+      class="w-6 h-6 bg-gray-500/50 rounded-md animate-pulse" 
+    />
+    <div class="absolute -top-2 z-20 opacity-0 group-hover:opacity-100 transition-all duration-300 text-xs px-2 py-0.5 bg-black/80 rounded-md whitespace-nowrap pointer-events-none transform group-hover:translate-y-5 backdrop-blur-sm">
+      {{ title }}
+    </div>
   </div>
 </template>
 

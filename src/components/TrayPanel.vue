@@ -9,6 +9,7 @@ interface TrayItem {
   icon_data?: string;
   title?: string;
   menu?: TrayMenu[];
+  tooltip?: string;
 }
 
 interface TrayMenu {
@@ -55,22 +56,36 @@ onUnmounted(() => {
 
 <template>
   <div class="flex items-center gap-1 px-2 h-full">
-    <div
-      v-for="item in trayItems"
-      :key="item.id"
-      class="flex items-center gap-1.5 px-2 py-1 rounded-lg cursor-pointer transition-colors duration-200 hover:bg-white/10"
-      @click="(e) => handleTrayClick(item, e)"
-      @contextmenu.prevent="(e) => handleTrayClick(item, e)"
+    <TransitionGroup 
+      name="tray-list"
+      tag="div"
+      class="flex items-center gap-1"
     >
-      <img
-        v-if="item.icon_data"
-        :src="`data:image/png;base64,${item.icon_data}`"
-        :alt="item.title || ''"
-        class="w-4 h-4 object-contain"
-      />
-      <div v-else class="w-4 h-4 bg-gray-500/50 rounded" />
-      <span v-if="item.title" class="text-xs text-white">{{ item.title }}</span>
-    </div>
+      <div
+        v-for="item in trayItems"
+        :key="item.id"
+        class="group flex items-center gap-1.5 px-2 py-1 rounded-lg cursor-pointer transform transition-all duration-300 hover:bg-white/10 hover:scale-105 active:scale-95 relative"
+        @click="(e) => handleTrayClick(item, e)"
+        @contextmenu.prevent="(e) => handleTrayClick(item, e)"
+      >
+        <img
+          v-if="item.icon_data"
+          :src="`data:image/png;base64,${item.icon_data}`"
+          :alt="item.title || ''"
+          class="w-4 h-4 object-contain transition-all duration-300 group-hover:rotate-6 group-hover:brightness-110"
+        />
+        <div v-else class="w-4 h-4 bg-gray-500/50 rounded animate-pulse" />
+        <span 
+          v-if="item.title" 
+          class="text-xs text-white transition-all duration-300 group-hover:text-white/90"
+        >
+          {{ item.title }}
+        </span>
+        <div class="absolute -bottom-1 opacity-0 group-hover:opacity-100 transition-all duration-300 text-xs px-2 py-0.5 bg-black/80 rounded-md whitespace-nowrap pointer-events-none transform group-hover:translate-y-5 backdrop-blur-sm">
+          {{ item.tooltip || item.title }}
+        </div>
+      </div>
+    </TransitionGroup>
   </div>
 </template>
 
@@ -113,5 +128,18 @@ onUnmounted(() => {
 .tray-title {
   font-size: 12px;
   color: #ffffff;
+}
+
+.tray-list-move {
+  transition: transform 0.3s ease;
+}
+.tray-list-enter-active,
+.tray-list-leave-active {
+  transition: all 0.3s ease;
+}
+.tray-list-enter-from,
+.tray-list-leave-to {
+  opacity: 0;
+  transform: translateX(30px);
 }
 </style> 

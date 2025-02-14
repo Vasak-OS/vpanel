@@ -11,11 +11,11 @@ onMounted(async () => {
 </script>
 
 <template>
-  <nav class="flex justify-between items-center px-1 mx-1 bg-black/50 text-white h-[30px] rounded-xl backdrop-blur-md"> 
+  <nav class="flex justify-between items-center px-1 mx-1 bg-black/50 text-white h-[30px] rounded-xl backdrop-blur-md transition-all duration-300 hover:bg-black/60"> 
     <img 
       src="/usr/share/icons/Fluent/scalable/apps/menu-editor.svg" 
       alt="Menu" 
-      class="h-7 w-7 cursor-pointer transition-all duration-200 p-1.5 rounded-lg hover:bg-white/10 hover:scale-105"
+      class="h-7 w-7 cursor-pointer p-1.5 rounded-lg hover:bg-white/10 transform transition-all duration-200 hover:scale-110 active:scale-95"
     />
     <WindowsArea />
     <div class="flex items-center gap-2">
