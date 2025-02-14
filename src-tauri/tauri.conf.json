@@ -13,7 +13,7 @@
   "app": {
     "windows": [
       {
-        "title": "vpanel",
+        "title": "Vasak Panel",
         "decorations": false,
         "width": 800,
         "height": 32,
