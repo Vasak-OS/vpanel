@@ -3,7 +3,7 @@ import { ref, onMounted, onUnmounted } from "vue";
 import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
 
-import WindowButtom from "./buttons/WindowButtom.vue";
+import WindowButton from "./buttons/WindowButton.vue";
 
 interface WindowInfo {
   id: string;
@@ -15,36 +15,41 @@ interface WindowInfo {
 const windows = ref<WindowInfo[]>([]);
 let unlisten: (() => void) | null = null;
 
-const refreshWindows = async () => {
+const refreshWindows = async (): Promise<void> => {
   try {
     windows.value = await invoke("get_windows");
   } catch (error) {
-    console.error("Error fetching windows:", error);
+    console.error("[Windows Error] Error obteniendo ventanas:", error);
   }
 };
 
 onMounted(async () => {
   await refreshWindows();
-  // Listen for window updates from Rust
-  unlisten = await listen("window-update", () => {
-    refreshWindows();
-  });
+  unlisten = await listen("window-update", refreshWindows);
 });
-onUnmounted(async () => {
-  if (unlisten) {
-    unlisten();
-  }
+
+onUnmounted(() => {
+  unlisten?.();
 });
 </script>
+
 <template>
-  <div class="flex">
-    <WindowButtom
+  <div class="windows-container">
+    <WindowButton
       v-for="window in windows"
       :key="window.id"
-      :id="window.id"
-      :title="window.title"
-      :is_minimized="window.is_minimized"
-      :icon="window.icon"
+      v-bind="window"
     />
   </div>
 </template>
+
+<style scoped>
+.windows-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  flex-grow: 1;
+  margin: 0 8px;
+}
+</style>
