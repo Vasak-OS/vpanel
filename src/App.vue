@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { onMounted } from "vue";
 import { setPanelProperties } from "@/common/window";
-import SystemTrayComponent from '@/components/SystemTrayComponent.vue';
 import WindowsArea from '@/components/WindowsArea.vue';
+import TrayPanel from '@/components/TrayPanel.vue';
 
 onMounted(async () => {
   await setPanelProperties();
@@ -17,7 +17,7 @@ onMounted(async () => {
       class="menu-icon"
     />
     <WindowsArea />
-    <SystemTrayComponent />
+    <TrayPanel />
   </nav>
 </template>
 
