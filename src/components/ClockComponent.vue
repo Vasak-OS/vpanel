@@ -41,9 +41,9 @@ onMounted(() => {
   <div class="px-2 font-mono text-sm">
     <span 
       :title="`${timeData.day}/${timeData.month}/${timeData.year}`"
-      class="transition-all duration-300 hover:text-white/80 cursor-default"
+      class="transition-all duration-300 hover:text-white/80 cursor-default animate-pulse"
     >
-      {{ timeData.hour }}<span class="animate-pulse p-0 m-0">:</span>{{ timeData.minute }}
+      {{ timeData.hour }}:{{ timeData.minute }}
     </span>
   </div>
 </template>
