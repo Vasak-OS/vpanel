@@ -1,36 +1,54 @@
-<script lang="ts" setup>
-import { ref } from 'vue';
+<script setup lang="ts">
+import { ref, onMounted } from 'vue';
 
-const day = ref('00');
-const month = ref('00');
-const year = ref('0000');
-const min = ref('00');
-const hour = ref('00');
-
-setInterval(() => {
-  const date = new Date();
-  hour.value = dobleDTO(date.getHours()); // 0 - 23
-  min.value = dobleDTO(date.getMinutes()); // 0 - 59
-  day.value = dobleDTO(date.getDate());
-  month.value = dobleDTO(date.getMonth() + 1);
-  year.value = date.getFullYear().toString();
-}, 5000);
-
-function dobleDTO(data: number): string {
-  return data < 10 ? `0${data}` : data.toString();
+interface TimeData {
+  day: string;
+  month: string;
+  year: string;
+  hour: string;
+  minute: string;
 }
+
+const timeData = ref<TimeData>({
+  day: '00',
+  month: '00',
+  year: '0000',
+  hour: '00',
+  minute: '00'
+});
+
+const formatNumber = (num: number): string => 
+  num.toString().padStart(2, '0');
+
+const updateTime = () => {
+  const date = new Date();
+  timeData.value = {
+    hour: formatNumber(date.getHours()),
+    minute: formatNumber(date.getMinutes()),
+    day: formatNumber(date.getDate()),
+    month: formatNumber(date.getMonth() + 1),
+    year: date.getFullYear().toString()
+  };
+};
+
+onMounted(() => {
+  updateTime();
+  setInterval(updateTime, 5000);
+});
 </script>
 
 <template>
-  <div id="clock">
-    <span
-      data-bs-toggle="tooltip"
-      data-bs-placement="left"
-      :title="
-        day.toString().padStart(2, '0') + '/' + month.toString().padStart(2, '0') + '/' + year
-      "
-    >
-      {{ hour }}:{{ min }}
+  <div class="clock">
+    <span :title="`${timeData.day}/${timeData.month}/${timeData.year}`">
+      {{ timeData.hour }}:{{ timeData.minute }}
     </span>
   </div>
 </template>
+
+<style scoped>
+.clock {
+  padding: 0 8px;
+  font-family: monospace;
+  font-size: 14px;
+}
+</style>
