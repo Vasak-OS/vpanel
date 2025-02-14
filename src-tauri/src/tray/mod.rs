@@ -1,5 +1,3 @@
-use tauri::Manager;
-
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct TrayItem {
     pub id: String,
