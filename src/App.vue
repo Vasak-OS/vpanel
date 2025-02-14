@@ -11,14 +11,14 @@ onMounted(async () => {
 </script>
 
 <template>
-  <nav class="panel-nav"> 
+  <nav class="flex justify-between items-center px-1 mx-1 bg-black/50 text-white h-[30px] rounded-xl backdrop-blur-md"> 
     <img 
       src="/usr/share/icons/Fluent/scalable/apps/menu-editor.svg" 
       alt="Menu" 
-      class="menu-icon"
+      class="h-7 w-7 cursor-pointer transition-all duration-200 p-1.5 rounded-lg hover:bg-white/10 hover:scale-105"
     />
     <WindowsArea />
-    <div class="right-section">
+    <div class="flex items-center gap-2">
       <TrayPanel />
       <ClockComponent />
     </div>

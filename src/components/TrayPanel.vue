@@ -54,11 +54,11 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="tray-panel">
+  <div class="flex items-center gap-1 px-2 h-full">
     <div
       v-for="item in trayItems"
       :key="item.id"
-      class="tray-item"
+      class="flex items-center gap-1.5 px-2 py-1 rounded-lg cursor-pointer transition-colors duration-200 hover:bg-white/10"
       @click="(e) => handleTrayClick(item, e)"
       @contextmenu.prevent="(e) => handleTrayClick(item, e)"
     >
@@ -66,10 +66,10 @@ onUnmounted(() => {
         v-if="item.icon_data"
         :src="`data:image/png;base64,${item.icon_data}`"
         :alt="item.title || ''"
-        class="tray-icon"
+        class="w-4 h-4 object-contain"
       />
-      <div v-else class="icon-placeholder" />
-      <span v-if="item.title" class="tray-title">{{ item.title }}</span>
+      <div v-else class="w-4 h-4 bg-gray-500/50 rounded" />
+      <span v-if="item.title" class="text-xs text-white">{{ item.title }}</span>
     </div>
   </div>
 </template>

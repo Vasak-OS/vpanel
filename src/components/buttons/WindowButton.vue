@@ -58,17 +58,17 @@ onMounted(async () => {
 
 <template>
   <div
-    class="window-button"
-    :class="{ 'window-minimized': is_minimized }"
+    class="flex items-center justify-center w-10 h-10 cursor-pointer transition-all duration-200 rounded-lg hover:bg-white/10 hover:scale-130"
+    :class="{ 'opacity-50': is_minimized }"
     @click="toggleWindow"
   >
     <img 
       v-if="icon && iconBase64" 
       :src="`data:${getImageType(iconBase64)};base64,${iconBase64}`" 
       :alt="title"
-      class="window-icon"
+      class="w-6 h-6"
     />
-    <div v-else class="icon-placeholder" />
+    <div v-else class="w-6 h-6 bg-gray-500/50 rounded-md" />
   </div>
 </template>
 
@@ -86,7 +86,7 @@ onMounted(async () => {
 
 .window-button:hover {
   background-color: rgba(255, 255, 255, 0.1);
-  transform: scale(1.05);
+  transform: scale(1.3);
 }
 
 .window-minimized {

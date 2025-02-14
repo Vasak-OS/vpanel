@@ -38,7 +38,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="clock">
+  <div class="px-2 font-mono text-sm">
     <span :title="`${timeData.day}/${timeData.month}/${timeData.year}`">
       {{ timeData.hour }}:{{ timeData.minute }}
     </span>

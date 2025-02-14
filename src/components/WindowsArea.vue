@@ -34,7 +34,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="windows-container">
+  <div class="flex items-center justify-center gap-0.5 flex-grow mx-2">
     <WindowButton
       v-for="window in windows"
       :key="window.id"
