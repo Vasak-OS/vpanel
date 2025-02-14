@@ -245,17 +245,7 @@ impl X11Manager {
     }
 
     fn should_show_window(&self, win: Window, atoms: &HashMap<&str, Atom>) -> Result<bool, Box<dyn std::error::Error>> {
-        let state = self.get_window_state(win, atoms)?;
-        let skip_states = [
-            atoms["_NET_WM_STATE_SKIP_TASKBAR"],
-            atoms["_NET_WM_STATE_SKIP_PAGER"],
-            atoms["_NET_WM_STATE_MODAL"],
-        ];
-
-        if state.iter().any(|s| skip_states.contains(s)) {
-            return Ok(false);
-        }
-
+        // Verificar la clase de la ventana primero
         let class_name = self.get_window_class(win)?;
         let skip_classes = [
             "desktop_window",
@@ -265,7 +255,6 @@ impl X11Manager {
             "wrapper-2.0",
             "notification",
             "Notification",
-            "vpanel",
             "panel",
             "dock",
             "toolbar",
@@ -273,6 +262,29 @@ impl X11Manager {
         ];
 
         if skip_classes.iter().any(|c| class_name.to_lowercase().contains(c)) {
+            return Ok(false);
+        }
+
+        // Verificar el título de la ventana
+        let title = self.get_window_title(win, atoms)?;
+        let skip_titles = [
+            "Vasak Panel",
+            "VPanel",
+            "vpanel",
+        ];
+
+        if skip_titles.iter().any(|t| title.contains(t)) {
+            return Ok(false);
+        }
+
+        let state = self.get_window_state(win, atoms)?;
+        let skip_states = [
+            atoms["_NET_WM_STATE_SKIP_TASKBAR"],
+            atoms["_NET_WM_STATE_SKIP_PAGER"],
+            atoms["_NET_WM_STATE_MODAL"],
+        ];
+
+        if state.iter().any(|s| skip_states.contains(s)) {
             return Ok(false);
         }
 
