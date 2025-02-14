@@ -1,17 +1,14 @@
-
 import { getCurrentWindow, LogicalSize } from "@tauri-apps/api/window";
+
 const thisWindow = await getCurrentWindow();
 
-
-const setPanelProperties = async () => {
+export const setPanelProperties = async (): Promise<void> => {
   try {
     const { width: screenWidth } = await window.screen;
     await thisWindow.setSize(new LogicalSize(screenWidth, 32));
   } catch (error) {
-    console.error("Error configurando la ventana como panel:", error);
+    console.error("[Panel Error] Error configurando la ventana:", error);
   }
 };
-
-export { setPanelProperties };
-
 export default thisWindow;
+
