@@ -6,33 +6,104 @@ use std::thread;
 use x11rb::connection::Connection;
 use x11rb::protocol::xproto::*;
 use x11rb::protocol::Event;
+use gtk::prelude::*;
+use gtk::IconTheme;
+use std::sync::atomic::{AtomicBool, Ordering};
+use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 
 pub struct X11Manager {
     conn: Arc<x11rb::rust_connection::RustConnection>,
     root: Window,
     windows: Arc<Mutex<HashMap<Window, WindowInfo>>>,
+    icon_cache: Arc<Mutex<HashMap<String, String>>>,
+    running: Arc<AtomicBool>,
 }
 
 impl X11Manager {
     pub fn new() -> Result<Self, Box<dyn std::error::Error>> {
         let (conn, screen_num) = x11rb::connect(None)?;
-        let root = conn.setup().roots[screen_num].root;
+        let screen = &conn.setup().roots[screen_num];
+        let root = screen.root;
         let conn = Arc::new(conn);
+
+        // Inicializar GTK solo si no está inicializado
+        if gtk::is_initialized() == false {
+            if let Err(e) = gtk::init() {
+                eprintln!("Failed to initialize GTK: {}", e);
+            }
+        }
         
         Ok(X11Manager {
             conn,
             root,
             windows: Arc::new(Mutex::new(HashMap::new())),
+            icon_cache: Arc::new(Mutex::new(HashMap::new())),
+            running: Arc::new(AtomicBool::new(true)),
         })
     }
 
-    // Funciones auxiliares para manejo de átomos y propiedades de ventanas
+    fn get_window_icon(&self, class_name: &str) -> Option<String> {
+        // Primero intentar obtener del cache
+        if let Ok(cache) = self.icon_cache.lock() {
+            if let Some(icon) = cache.get(class_name) {
+                return Some(icon.clone());
+            }
+        }
+
+        // Si no está en cache, buscar el icono
+        if gtk::is_initialized() {
+            if let Some(icon_theme) = IconTheme::default() {
+                let icon_names = [
+                    class_name.to_lowercase(),
+                    format!("{}.desktop", class_name.to_lowercase()),
+                    format!("{}-symbolic", class_name.to_lowercase()),
+                    "application-x-executable".to_string(),
+                ];
+
+                for icon_name in icon_names.iter() {
+                    if let Some(icon_info) = icon_theme.lookup_icon(
+                        icon_name,
+                        48,
+                        gtk::IconLookupFlags::FORCE_SIZE
+                    ) {
+                        if let Some(path) = icon_info.filename() {
+                            if let Ok(icon_data) = std::fs::read(path) {
+                                let icon_base64 = BASE64.encode(&icon_data);
+                                // Guardar en cache
+                                if let Ok(mut cache) = self.icon_cache.lock() {
+                                    cache.insert(class_name.to_string(), icon_base64.clone());
+                                }
+                                return Some(icon_base64);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        None
+    }
+
     fn get_required_atoms(&self) -> Result<HashMap<&'static str, Atom>, Box<dyn std::error::Error>> {
         let atom_names = [
             "_NET_CLIENT_LIST",
             "_NET_WM_NAME",
             "_NET_WM_STATE",
             "_NET_WM_STATE_HIDDEN",
+            "_NET_WM_STATE_SKIP_TASKBAR",
+            "_NET_WM_STATE_SKIP_PAGER",
+            "_NET_WM_STATE_MODAL",
+            "_NET_WM_WINDOW_TYPE",
+            "_NET_WM_WINDOW_TYPE_DOCK",
+            "_NET_WM_WINDOW_TYPE_DESKTOP",
+            "_NET_WM_WINDOW_TYPE_NOTIFICATION",
+            "_NET_WM_WINDOW_TYPE_TOOLBAR",
+            "_NET_WM_WINDOW_TYPE_MENU",
+            "_NET_WM_WINDOW_TYPE_SPLASH",
+            "_NET_WM_WINDOW_TYPE_DIALOG",
+            "_NET_WM_WINDOW_TYPE_UTILITY",
+            "_NET_WM_WINDOW_TYPE_TOOLTIP",
+            "_NET_WM_WINDOW_TYPE_POPUP_MENU",
             "UTF8_STRING",
             "_NET_ACTIVE_WINDOW",
         ];
@@ -45,7 +116,6 @@ impl X11Manager {
         Ok(atoms)
     }
 
-    // Funciones principales de gestión de ventanas
     fn get_window_title(&self, win: Window, atoms: &HashMap<&str, Atom>) 
         -> Result<String, Box<dyn std::error::Error>> {
         let reply = self.conn.get_property(
@@ -115,7 +185,6 @@ impl X11Manager {
             )?
             .reply()?;
 
-        // Verificar si la ventana actual está en foco
         Ok(active_window_reply
             .value32()
             .map(|mut v| v.next() == Some(window))
@@ -131,7 +200,6 @@ impl X11Manager {
         let net_wm_state_hidden_atom = atoms["_NET_WM_STATE_HIDDEN"];
         let root = self.conn.setup().roots[0].root;
 
-        // Crear y enviar el evento de minimización
         let event = ClientMessageEvent {
             response_type: x11rb::protocol::xproto::CLIENT_MESSAGE_EVENT,
             format: 32,
@@ -150,7 +218,6 @@ impl X11Manager {
         Ok(())
     }
 
-    /// Lleva la ventana al foco
     fn focus_window(
         &self,
         window: Window,
@@ -159,7 +226,6 @@ impl X11Manager {
         let net_active_window_atom = atoms["_NET_ACTIVE_WINDOW"];
         let root = self.conn.setup().roots[0].root;
 
-        // Crear y enviar el evento para traer la ventana al foco
         let event = ClientMessageEvent {
             response_type: x11rb::protocol::xproto::CLIENT_MESSAGE_EVENT,
             format: 32,
@@ -176,6 +242,57 @@ impl X11Manager {
             event,
         )?;
         Ok(())
+    }
+
+    fn should_show_window(&self, win: Window, atoms: &HashMap<&str, Atom>) -> Result<bool, Box<dyn std::error::Error>> {
+        let state = self.get_window_state(win, atoms)?;
+        let skip_states = [
+            atoms["_NET_WM_STATE_SKIP_TASKBAR"],
+            atoms["_NET_WM_STATE_SKIP_PAGER"],
+            atoms["_NET_WM_STATE_MODAL"],
+        ];
+
+        if state.iter().any(|s| skip_states.contains(s)) {
+            return Ok(false);
+        }
+
+        let class_name = self.get_window_class(win)?;
+        let skip_classes = [
+            "desktop_window",
+            "Plank",
+            "Tint2",
+            "Wrapper",
+            "wrapper-2.0",
+            "notification",
+            "Notification",
+            "vpanel",
+            "panel",
+            "dock",
+            "toolbar",
+            "menu",
+        ];
+
+        if skip_classes.iter().any(|c| class_name.to_lowercase().contains(c)) {
+            return Ok(false);
+        }
+
+        let title = self.get_window_title(win, atoms)?;
+        if title.trim().is_empty() {
+            return Ok(false);
+        }
+
+        let attrs = self.conn.get_window_attributes(win)?.reply()?;
+        if attrs.map_state != MapState::VIEWABLE {
+            return Ok(false);
+        }
+
+        if let Ok(geom) = self.conn.get_geometry(win)?.reply() {
+            if geom.width < 50 || geom.height < 50 {
+                return Ok(false);
+            }
+        }
+
+        Ok(true)
     }
 }
 
@@ -214,7 +331,6 @@ impl WindowManagerBackend for X11Manager {
         let atoms = self.get_required_atoms()?;
         let root = self.conn.setup().roots[0].root;
 
-        // Evento para alternar el estado de la ventana
         let event = ClientMessageEvent {
             response_type: CLIENT_MESSAGE_EVENT,
             format: 32,
@@ -257,5 +373,11 @@ impl WindowManagerBackend for X11Manager {
         });
 
         Ok(())
+    }
+}
+
+impl Drop for X11Manager {
+    fn drop(&mut self) {
+        self.running.store(false, Ordering::SeqCst);
     }
 }
