@@ -11,7 +11,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <nav class="flex justify-between items-center px-1 mx-1 bg-black/50 text-white h-[30px] rounded-xl backdrop-blur-md transition-all duration-300 hover:bg-black/60"> 
+  <nav class="flex justify-between items-center px-1 mx-1 bg-white/50 dark:bg-black/50 text-white h-[30px] rounded-xl backdrop-blur-md transition-all duration-300 hover:bg-black/60"> 
     <img 
       src="/usr/share/icons/Fluent/scalable/apps/menu-editor.svg" 
       alt="Menu" 
@@ -32,7 +32,6 @@ onMounted(async () => {
   align-items: center;
   padding: 0 2px;
   margin: 0 2px;
-  background-color: rgba(0, 0, 0, 0.5);
   color: white;
   height: 30px;
   border-radius: 12px;
