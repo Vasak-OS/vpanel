@@ -15,6 +15,15 @@
     "core:window:allow-set-max-size",
     "core:window:allow-set-min-size",
     "positioner:allow-move-window",
-    "positioner:allow-set-tray-icon-state"
+    "positioner:allow-set-tray-icon-state",
+    {
+      "identifier": "shell:allow-execute",
+      "allow": [
+        {
+          "name": "vmenu",
+          "cmd": "vmenu"
+        }
+      ]
+    }
   ]
 }

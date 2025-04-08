@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { onMounted, ref, type Ref } from "vue";
+import { Command } from '@tauri-apps/plugin-shell'
 import { setPanelProperties } from "@/common/window";
 import WindowsArea from '@/components/WindowsArea.vue';
 import TrayPanel from '@/components/TrayPanel.vue';
 import ClockComponent from '@/components/ClockComponent.vue';
-import { getIcon } from "@/common/icons";
+import { getIcon, getImageType } from "@/common/icons";
 
 const menuIcon: Ref<string> = ref('');
 
@@ -16,6 +17,10 @@ const setIcon = async () => {
   }
 }
 
+const openMenu = () => {
+  Command.create('vmenu').execute()
+}
+
 onMounted(async () => {
   setIcon();
   await setPanelProperties();
@@ -25,7 +30,7 @@ onMounted(async () => {
 <template>
   <nav
     class="flex justify-between items-center px-1 mx-1 bg-white/50 dark:bg-black/50 text-white h-[30px] rounded-xl backdrop-blur-md transition-all duration-300 hover:bg-black/60">
-    <img :src="menuIcon" alt="Menu"
+    <img :src="`data:${getImageType(menuIcon)};base64,${menuIcon}`"  alt="Menu" @click="openMenu"
       class="h-7 w-7 cursor-pointer p-1.5 rounded-lg hover:bg-white/10 transform transition-all duration-200 hover:scale-110 active:scale-95" />
     <WindowsArea />
     <div class="flex items-center gap-2">
