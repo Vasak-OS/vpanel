@@ -22,6 +22,9 @@
         {
           "name": "vmenu",
           "cmd": "vmenu"
+        },{
+          "name": "vasak-control-center",
+          "cmd": "vasak-control-center"
         }
       ]
     }

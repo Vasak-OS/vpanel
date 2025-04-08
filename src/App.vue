@@ -8,8 +8,9 @@ import ClockComponent from '@/components/ClockComponent.vue';
 import { getIcon, getImageType } from "@/common/icons";
 
 const menuIcon: Ref<string> = ref('');
+const notifyIcon: Ref<string> = ref('');
 
-const setIcon = async () => {
+const setMenuIcon = async () => {
   try {
     menuIcon.value = await getIcon('menu-editor');
   } catch (err) {
@@ -17,12 +18,25 @@ const setIcon = async () => {
   }
 }
 
+const setNotifyIcon = async () => {
+  try {
+    notifyIcon.value = await getIcon('preferences-desktop-notification')
+  } catch (err) {
+    console.error('Error: finding notify icon')
+  }
+}
+
 const openMenu = () => {
   Command.create('vmenu').execute()
 }
 
+const openNotificationCenter = () => {
+  Command.create('vasak-control-center').execute()
+}
+
 onMounted(async () => {
-  setIcon();
+  setMenuIcon();
+  setNotifyIcon();
   await setPanelProperties();
 });
 </script>
@@ -36,6 +50,8 @@ onMounted(async () => {
     <div class="flex items-center gap-2">
       <TrayPanel />
       <ClockComponent />
+      <img :src="`data:${getImageType(notifyIcon)};base64,${notifyIcon}`"  alt="Menu" @click="openNotificationCenter"
+      class="h-7 w-7 cursor-pointer p-1.5 rounded-lg hover:bg-white/10 transform transition-all duration-200 hover:scale-110 active:scale-95" />
     </div>
   </nav>
 </template>
