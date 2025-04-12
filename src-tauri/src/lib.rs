@@ -1,5 +1,3 @@
-#[path = "./commands/icons.rs"]
-mod icons;
 mod window_manager;
 //mod strut_manager;
 mod tray;
@@ -99,6 +97,7 @@ pub fn run() {
                 let _ = window.set_focus();
             }
         }))
+        .plugin(tauri_plugin_vicons::init())
         .setup(move |app| {
             let window = app
                 .get_webview_window("main")
@@ -116,8 +115,6 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             get_windows,
             toggle_window,
-            icons::get_icon_base64,
-            icons::get_symbol_base64,
             get_tray_items,
             handle_tray_click
         ])
