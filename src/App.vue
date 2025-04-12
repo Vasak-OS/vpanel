@@ -5,14 +5,14 @@ import { setPanelProperties } from "@/common/window";
 import WindowsArea from '@/components/WindowsArea.vue';
 import TrayPanel from '@/components/TrayPanel.vue';
 import ClockComponent from '@/components/ClockComponent.vue';
-import { getIcon, getImageType } from "@/common/icons";
+import { getIconSource } from '@vasakgroup/plugin-vicons'
 
 const menuIcon: Ref<string> = ref('');
 const notifyIcon: Ref<string> = ref('');
 
 const setMenuIcon = async () => {
   try {
-    menuIcon.value = await getIcon('menu-editor');
+    menuIcon.value = await getIconSource('menu-editor');
   } catch (err) {
     console.error('Error: finding icon menu')
   }
@@ -20,7 +20,7 @@ const setMenuIcon = async () => {
 
 const setNotifyIcon = async () => {
   try {
-    notifyIcon.value = await getIcon('preferences-desktop-notification')
+    notifyIcon.value = await getIconSource('preferences-desktop-notification')
   } catch (err) {
     console.error('Error: finding notify icon')
   }
@@ -44,13 +44,13 @@ onMounted(async () => {
 <template>
   <nav
     class="flex justify-between items-center px-1 mx-1 bg-white/50 dark:bg-black/50 text-white h-[30px] rounded-xl backdrop-blur-md transition-all duration-300 hover:bg-black/60">
-    <img :src="`data:${getImageType(menuIcon)};base64,${menuIcon}`"  alt="Menu" @click="openMenu"
+    <img :src="menuIcon"  alt="Menu" @click="openMenu"
       class="h-7 w-7 cursor-pointer p-1.5 rounded-lg hover:bg-white/10 transform transition-all duration-200 hover:scale-110 active:scale-95" />
     <WindowsArea />
     <div class="flex items-center gap-2">
       <TrayPanel />
       <ClockComponent />
-      <img :src="`data:${getImageType(notifyIcon)};base64,${notifyIcon}`"  alt="Menu" @click="openNotificationCenter"
+      <img :src="notifyIcon"  alt="Menu" @click="openNotificationCenter"
       class="h-7 w-7 cursor-pointer p-1.5 rounded-lg hover:bg-white/10 transform transition-all duration-200 hover:scale-110 active:scale-95" />
     </div>
   </nav>

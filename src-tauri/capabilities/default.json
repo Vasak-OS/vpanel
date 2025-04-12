@@ -16,6 +16,7 @@
     "core:window:allow-set-min-size",
     "positioner:allow-move-window",
     "positioner:allow-set-tray-icon-state",
+    "vicons:default",
     {
       "identifier": "shell:allow-execute",
       "allow": [

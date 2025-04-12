@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from "vue";
 import { invoke } from "@tauri-apps/api/core";
-import { getIcon, getImageType } from "@/common/icons";
+import { getIconSource } from "@vasakgroup/plugin-vicons";
 
 interface Props {
   id: string;
@@ -11,7 +11,7 @@ interface Props {
 }
 
 const props = defineProps<Props>();
-const iconBase64 = ref<string>("");
+const iconSource = ref<string>("");
 
 const toggleWindow = async (): Promise<void> => {
   try {
@@ -23,7 +23,7 @@ const toggleWindow = async (): Promise<void> => {
 
 onMounted(async () => {
   if (props.icon) {
-    iconBase64.value = await getIcon(props.icon);
+    iconSource.value = await getIconSource(props.icon);
   }
 });
 </script>
@@ -35,8 +35,8 @@ onMounted(async () => {
     @click="toggleWindow"
   >
     <img 
-      v-if="icon && iconBase64" 
-      :src="`data:${getImageType(iconBase64)};base64,${iconBase64}`" 
+      v-if="icon && iconSource" 
+      :src="iconSource" 
       :alt="title"
       class="w-6 h-6 transition-all duration-300 group-hover:rotate-3 group-hover:brightness-110"
     />
