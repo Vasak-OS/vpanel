@@ -14,7 +14,7 @@
     "@tauri-apps/api": "^2.4.1",
     "@tauri-apps/plugin-positioner": "~2.2.0",
     "@tauri-apps/plugin-shell": "^2.2.1",
-    "@vasakgroup/plugin-vicons": "^0.1.0",
+    "@vasakgroup/plugin-vicons": "^2.0.0",
     "vue": "^3.5.13"
   },
   "devDependencies": {
