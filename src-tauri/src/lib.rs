@@ -1,6 +1,4 @@
 mod window_manager;
-//mod strut_manager;
-mod tray;
 
 use gtk::prelude::*;
 use std::sync::mpsc::channel;
@@ -8,7 +6,6 @@ use std::sync::{Arc, Mutex};
 use tauri::{Manager, Emitter};
 use tauri_plugin_positioner::{Position, WindowExt};
 use window_manager::{WindowInfo, WindowManager};
-use tray::{TrayManager, get_tray_items, handle_tray_click};
 //use strut_manager::StrutManager;
 
 // Estado principal de la aplicación
@@ -76,9 +73,6 @@ fn setup_event_monitoring(
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let tray_manager = TrayManager::new()
-        .expect("Failed to initialize tray manager");
-
     let window_manager = Arc::new(Mutex::new(
         WindowManager::new().expect("Failed to initialize window manager")
     ));
@@ -89,7 +83,6 @@ pub fn run() {
 
     tauri::Builder::default()
         .manage(app_state)
-        .manage(tray_manager)
         .plugin(tauri_plugin_positioner::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
@@ -106,17 +99,12 @@ pub fn run() {
             setup_main_window(&window)?;
             setup_event_monitoring(window_manager.clone(), app.handle().clone())?;
 
-            let tray_manager = app.state::<TrayManager>();
-            tray_manager.setup_monitoring(app.handle().clone())?;
-
             Ok(())
         })
         //.invoke_handler(tauri::generate_handler![icons::get_icon])
         .invoke_handler(tauri::generate_handler![
             get_windows,
-            toggle_window,
-            get_tray_items,
-            handle_tray_click
+            toggle_window
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
