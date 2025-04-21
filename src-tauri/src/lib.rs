@@ -96,13 +96,12 @@ pub fn run() {
 
             let app_handle = app.handle();
 
-            system_tray::spawn_systray(app_handle.clone());
             setup_main_window(&window)?;
             setup_event_monitoring(window_manager.clone(), app.handle().clone())?;
+            system_tray::spawn_systray(app_handle.clone());
 
             Ok(())
         })
-        //.invoke_handler(tauri::generate_handler![icons::get_icon])
         .invoke_handler(tauri::generate_handler![
             get_windows,
             toggle_window

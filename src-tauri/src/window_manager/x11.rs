@@ -6,10 +6,7 @@ use std::thread;
 use x11rb::connection::Connection;
 use x11rb::protocol::xproto::*;
 use x11rb::protocol::Event;
-use gtk::prelude::*;
-use gtk::IconTheme;
 use std::sync::atomic::{AtomicBool, Ordering};
-use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 
 pub struct X11Manager {
     conn: Arc<x11rb::rust_connection::RustConnection>,

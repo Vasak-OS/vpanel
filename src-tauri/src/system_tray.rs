@@ -45,13 +45,12 @@ async fn dbus_session() -> zbus::Result<&'static DBusSession> {
 
 struct Tray {
     app_handle: tauri::AppHandle,
-    item_tasks: std::collections::HashMap<String, tokio::task::JoinHandle<()>>,
+    item_tasks: std::collections::HashMap<String, tauri::async_runtime::JoinHandle<()>>,
 }
 
-pub async fn spawn_systray(app_handle: tauri::AppHandle) {
+pub fn spawn_systray(app_handle: tauri::AppHandle) {
     log::info!("Spawning system tray handler");
 
-    // Corrección: Usar tauri::async_runtime::spawn en lugar de tokio::spawn
     tauri::async_runtime::spawn(async move { // <--- CAMBIO AQUÍ
         let dbus_session = match dbus_session().await {
             Ok(x) => x,
@@ -248,8 +247,8 @@ fn spawn_item_listener(
     id: String,
     item: notifier_host::Item,
     app_handle: tauri::AppHandle,
-) -> tokio::task::JoinHandle<()> {
-    tokio::spawn(async move {
+) -> tauri::async_runtime::JoinHandle<()> {
+    tauri::async_runtime::spawn(async move {
         // Fetch inicial
         let initial_fetch_app_handle = app_handle.clone();
         let initial_fetch_id = id.clone();
