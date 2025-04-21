@@ -31,6 +31,15 @@ image = "0.25"
 base64 = "0.21"
 tauri-plugin-vicons = { git = "https://github.com/Vasak-OS/tauri-plugin-vicons", branch = "v2"}
 
+quick-xml = { version = "0", features = ["serialize"] }
+tokio-util = "0.7"
+tokio = { version = "1", features = ["full"] }
+unescape = "0.1"
+wait-timeout = "0.2"
+zbus = { version = "3", default-features = false, features = ["tokio"] }
+gdk-pixbuf = { version = "0"}
+notifier-host = { path = "../../notifier-host" }
+log = { version = "0.4" }
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-positioner = { version = "2.0.0", features = ["tray-icon"] }
