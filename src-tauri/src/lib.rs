@@ -96,9 +96,9 @@ pub fn run() {
 
             let app_handle = app.handle();
 
-            setup_main_window(&window)?;
-            setup_event_monitoring(window_manager.clone(), app.handle().clone())?;
             system_tray::spawn_systray(app_handle.clone());
+            setup_main_window(&window)?;
+            setup_event_monitoring(window_manager.clone(), app_handle.clone())?;
 
             Ok(())
         })
