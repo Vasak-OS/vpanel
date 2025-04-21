@@ -1,5 +1,5 @@
 mod window_manager;
-//mod system_tray;
+mod system_tray;
 
 use gtk::prelude::*;
 use std::sync::mpsc::channel;
@@ -7,12 +7,9 @@ use std::sync::{Arc, Mutex};
 use tauri::{Manager, Emitter};
 use tauri_plugin_positioner::{Position, WindowExt};
 use window_manager::{WindowInfo, WindowManager};
-//use strut_manager::StrutManager;
-
 // Estado principal de la aplicación
 struct AppState {
     window_manager: Arc<Mutex<WindowManager>>,
-    //strut_manager: Arc<Mutex<StrutManager>>,
 }
 
 // Comandos de la API
@@ -97,10 +94,9 @@ pub fn run() {
                 .get_webview_window("main")
                 .expect("main window not found");
 
-            //let app_handle = app.handle();
+            let app_handle = app.handle();
 
-            //system_tray::spawn_systray(app_handle.clone());
-
+            system_tray::spawn_systray(app_handle.clone());
             setup_main_window(&window)?;
             setup_event_monitoring(window_manager.clone(), app.handle().clone())?;
 

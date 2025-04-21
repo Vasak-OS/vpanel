@@ -4,7 +4,6 @@ use tauri::Emitter;
 use zbus::export::futures_util::StreamExt;
 use base64::{engine::general_purpose::STANDARD as BASE64_STANDARD, Engine as _};
 use gdk_pixbuf::{Pixbuf, Colorspace};
-// Necesitamos glib::Bytes y glib::Error
 use gtk::glib::{Bytes as GlibBytes, Error as GlibError}; // Import Error too
 
 
@@ -49,7 +48,7 @@ struct Tray {
     item_tasks: std::collections::HashMap<String, tokio::task::JoinHandle<()>>,
 }
 
-pub fn spawn_systray(app_handle: tauri::AppHandle) {
+pub async fn spawn_systray(app_handle: tauri::AppHandle) {
     log::info!("Spawning system tray handler");
 
     // Corrección: Usar tauri::async_runtime::spawn en lugar de tokio::spawn
