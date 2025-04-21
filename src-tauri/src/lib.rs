@@ -1,4 +1,5 @@
 mod window_manager;
+//mod system_tray;
 
 use gtk::prelude::*;
 use std::sync::mpsc::channel;
@@ -95,6 +96,10 @@ pub fn run() {
             let window = app
                 .get_webview_window("main")
                 .expect("main window not found");
+
+            //let app_handle = app.handle();
+
+            //system_tray::spawn_systray(app_handle.clone());
 
             setup_main_window(&window)?;
             setup_event_monitoring(window_manager.clone(), app.handle().clone())?;
