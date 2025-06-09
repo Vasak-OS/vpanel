@@ -24,7 +24,7 @@ let unlisten: (() => void) | null = null;
 
 const refreshTrayItems = async (): Promise<void> => {
   try {
-    trayItems.value = await invoke("get_tray_items");
+    //trayItems.value = await invoke("get_tray_items");
   } catch (error) {
     console.error("[TrayPanel Error] Error obteniendo items:", error);
   }
