@@ -1,15 +1,15 @@
 use super::{WindowInfo, WindowManagerBackend};
+use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
+use gtk::prelude::*;
+use gtk::IconTheme;
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use x11rb::connection::Connection;
 use x11rb::protocol::xproto::*;
 use x11rb::protocol::Event;
-use gtk::prelude::*;
-use gtk::IconTheme;
-use std::sync::atomic::{AtomicBool, Ordering};
-use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 
 pub struct X11Manager {
     conn: Arc<x11rb::rust_connection::RustConnection>,
@@ -32,7 +32,7 @@ impl X11Manager {
                 eprintln!("Failed to initialize GTK: {}", e);
             }
         }
-        
+
         Ok(X11Manager {
             conn,
             root,
@@ -61,11 +61,9 @@ impl X11Manager {
                 ];
 
                 for icon_name in icon_names.iter() {
-                    if let Some(icon_info) = icon_theme.lookup_icon(
-                        icon_name,
-                        48,
-                        gtk::IconLookupFlags::FORCE_SIZE
-                    ) {
+                    if let Some(icon_info) =
+                        icon_theme.lookup_icon(icon_name, 48, gtk::IconLookupFlags::FORCE_SIZE)
+                    {
                         if let Some(path) = icon_info.filename() {
                             if let Ok(icon_data) = std::fs::read(path) {
                                 let icon_base64 = BASE64.encode(&icon_data);
@@ -84,7 +82,9 @@ impl X11Manager {
         None
     }
 
-    fn get_required_atoms(&self) -> Result<HashMap<&'static str, Atom>, Box<dyn std::error::Error>> {
+    fn get_required_atoms(
+        &self,
+    ) -> Result<HashMap<&'static str, Atom>, Box<dyn std::error::Error>> {
         let atom_names = [
             "_NET_CLIENT_LIST",
             "_NET_WM_NAME",
@@ -116,32 +116,47 @@ impl X11Manager {
         Ok(atoms)
     }
 
-    fn get_window_title(&self, win: Window, atoms: &HashMap<&str, Atom>) 
-        -> Result<String, Box<dyn std::error::Error>> {
-        let reply = self.conn.get_property(
-            false,
-            win,
-            atoms["_NET_WM_NAME"],
-            atoms["UTF8_STRING"],
-            0,
-            u32::MAX,
-        )?.reply()?;
+    fn get_window_title(
+        &self,
+        win: Window,
+        atoms: &HashMap<&str, Atom>,
+    ) -> Result<String, Box<dyn std::error::Error>> {
+        let reply = self
+            .conn
+            .get_property(
+                false,
+                win,
+                atoms["_NET_WM_NAME"],
+                atoms["UTF8_STRING"],
+                0,
+                u32::MAX,
+            )?
+            .reply()?;
 
         Ok(String::from_utf8_lossy(&reply.value).into_owned())
     }
 
-    fn get_window_state(&self, win: Window, atoms: &HashMap<&str, Atom>) 
-        -> Result<Vec<Atom>, Box<dyn std::error::Error>> {
-        let reply = self.conn.get_property(
-            false,
-            win,
-            atoms["_NET_WM_STATE"],
-            AtomEnum::ATOM,
-            0,
-            u32::MAX,
-        )?.reply()?;
+    fn get_window_state(
+        &self,
+        win: Window,
+        atoms: &HashMap<&str, Atom>,
+    ) -> Result<Vec<Atom>, Box<dyn std::error::Error>> {
+        let reply = self
+            .conn
+            .get_property(
+                false,
+                win,
+                atoms["_NET_WM_STATE"],
+                AtomEnum::ATOM,
+                0,
+                u32::MAX,
+            )?
+            .reply()?;
 
-        Ok(reply.value32().map(|iter| iter.collect()).unwrap_or_default())
+        Ok(reply
+            .value32()
+            .map(|iter| iter.collect())
+            .unwrap_or_default())
     }
 
     fn get_window_class(&self, win: Window) -> Result<String, Box<dyn std::error::Error>> {
@@ -244,64 +259,79 @@ impl X11Manager {
         Ok(())
     }
 
-    fn should_show_window(&self, win: Window, atoms: &HashMap<&str, Atom>) -> Result<bool, Box<dyn std::error::Error>> {
-        // Verificar la clase de la ventana primero
+    fn should_show_window(
+        &self,
+        win: Window,
+        atoms: &HashMap<&str, Atom>,
+    ) -> Result<bool, Box<dyn std::error::Error>> {
+        let attributes = self.conn.get_window_attributes(win)?.reply()?;
+        if attributes.override_redirect {
+            return Ok(false);
+        }
+        if attributes.map_state != MapState::VIEWABLE {
+            return Ok(false);
+        }
+
+        // Verificar el tipo de ventana
+        if let Some(net_wm_window_type_atom) = atoms.get("_NET_WM_WINDOW_TYPE") {
+            if let Ok(reply) = self
+                .conn
+                .get_property(
+                    false,
+                    win,
+                    *net_wm_window_type_atom,
+                    AtomEnum::ATOM,
+                    0,
+                    u32::MAX,
+                )?
+                .reply()
+            {
+                if let Some(types) = reply.value32() {
+                    for window_type_atom_value in types {
+                        if Some(&window_type_atom_value) == atoms.get("_NET_WM_WINDOW_TYPE_DOCK")
+                            || Some(&window_type_atom_value)
+                                == atoms.get("_NET_WM_WINDOW_TYPE_TOOLBAR")
+                            || Some(&window_type_atom_value)
+                                == atoms.get("_NET_WM_WINDOW_TYPE_DESKTOP")
+                            || Some(&window_type_atom_value)
+                                == atoms.get("_NET_WM_WINDOW_TYPE_SPLASH")
+                            || Some(&window_type_atom_value)
+                                == atoms.get("_NET_WM_WINDOW_TYPE_UTILITY")
+                            || Some(&window_type_atom_value)
+                                == atoms.get("_NET_WM_WINDOW_TYPE_DROPDOWN_MENU")
+                            || Some(&window_type_atom_value)
+                                == atoms.get("_NET_WM_WINDOW_TYPE_POPUP_MENU")
+                            || Some(&window_type_atom_value)
+                                == atoms.get("_NET_WM_WINDOW_TYPE_NOTIFICATION")
+                        {
+                            return Ok(false);
+                        }
+                    }
+                }
+            }
+        }
+
+        // Verificar la clase de la ventana
         let class_name = self.get_window_class(win)?;
         let skip_classes = [
-            "desktop_window",
-            "Plank",
-            "Tint2",
-            "Wrapper",
-            "wrapper-2.0",
-            "notification",
-            "Notification",
-            "panel",
-            "dock",
-            "toolbar",
-            "menu",
-        ];
-
-        if skip_classes.iter().any(|c| class_name.to_lowercase().contains(c)) {
-            return Ok(false);
-        }
-
-        // Verificar el título de la ventana
-        let title = self.get_window_title(win, atoms)?;
-        let skip_titles = [
-            "Vasak Panel",
-            "VPanel",
             "vpanel",
+            "tauri",
+            "trayer",
+            "plank",
+            "docky",
+            "cairo-dock",
+            "tint2",
+            "polybar",
+            "lemonbar",
+            "vmenu",
+            "vasak-control-center",
         ];
 
-        if skip_titles.iter().any(|t| title.contains(t)) {
+        if skip_classes
+            .iter()
+            .any(|c| class_name.to_lowercase().contains(c))
+        {
             return Ok(false);
-        }
-
-        let state = self.get_window_state(win, atoms)?;
-        let skip_states = [
-            atoms["_NET_WM_STATE_SKIP_TASKBAR"],
-            atoms["_NET_WM_STATE_SKIP_PAGER"],
-            atoms["_NET_WM_STATE_MODAL"],
-        ];
-
-        if state.iter().any(|s| skip_states.contains(s)) {
-            return Ok(false);
-        }
-
-        let title = self.get_window_title(win, atoms)?;
-        if title.trim().is_empty() {
-            return Ok(false);
-        }
-
-        let attrs = self.conn.get_window_attributes(win)?.reply()?;
-        if attrs.map_state != MapState::VIEWABLE {
-            return Ok(false);
-        }
-
-        if let Ok(geom) = self.conn.get_geometry(win)?.reply() {
-            if geom.width < 50 || geom.height < 50 {
-                return Ok(false);
-            }
         }
 
         Ok(true)
@@ -311,14 +341,17 @@ impl X11Manager {
 impl WindowManagerBackend for X11Manager {
     fn get_window_list(&self) -> Result<Vec<WindowInfo>, Box<dyn std::error::Error>> {
         let atoms = self.get_required_atoms()?;
-        let reply = self.conn.get_property(
-            false,
-            self.root,
-            atoms["_NET_CLIENT_LIST"],
-            AtomEnum::WINDOW,
-            0,
-            u32::MAX,
-        )?.reply()?;
+        let reply = self
+            .conn
+            .get_property(
+                false,
+                self.root,
+                atoms["_NET_CLIENT_LIST"],
+                AtomEnum::WINDOW,
+                0,
+                u32::MAX,
+            )?
+            .reply()?;
 
         let windows: Vec<Window> = reply.value32().map_or_else(Vec::new, |iter| iter.collect());
         let mut window_list = Vec::new();
@@ -326,7 +359,10 @@ impl WindowManagerBackend for X11Manager {
         for win in windows {
             let title = self.get_window_title(win, &atoms)?;
             let state = self.get_window_state(win, &atoms)?;
-            
+
+            if !self.should_show_window(win, &atoms)? {
+                continue;
+            }
             window_list.push(WindowInfo {
                 id: win.to_string(),
                 title,
