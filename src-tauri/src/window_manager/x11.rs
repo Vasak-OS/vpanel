@@ -1,21 +1,17 @@
 use super::{WindowInfo, WindowManagerBackend};
-use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
-use gtk::prelude::*;
-use gtk::IconTheme;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::Sender;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::thread;
 use x11rb::connection::Connection;
 use x11rb::protocol::xproto::*;
 use x11rb::protocol::Event;
+use x11rb::CURRENT_TIME;
 
 pub struct X11Manager {
     conn: Arc<x11rb::rust_connection::RustConnection>,
     root: Window,
-    windows: Arc<Mutex<HashMap<Window, WindowInfo>>>,
-    icon_cache: Arc<Mutex<HashMap<String, String>>>,
     running: Arc<AtomicBool>,
 }
 
@@ -36,8 +32,6 @@ impl X11Manager {
         Ok(X11Manager {
             conn,
             root,
-            windows: Arc::new(Mutex::new(HashMap::new())),
-            icon_cache: Arc::new(Mutex::new(HashMap::new())),
             running: Arc::new(AtomicBool::new(true)),
         })
     }
@@ -64,6 +58,7 @@ impl X11Manager {
             "_NET_WM_WINDOW_TYPE_UTILITY",
             "_NET_WM_WINDOW_TYPE_TOOLTIP",
             "_NET_WM_WINDOW_TYPE_POPUP_MENU",
+            "_NET_WM_STATE_DEMANDS_ATTENTION",
             "UTF8_STRING",
             "_NET_ACTIVE_WINDOW",
         ];
@@ -132,10 +127,16 @@ impl X11Manager {
 
         if let Some(data) = reply.value8() {
             let data_vec: Vec<u8> = data.collect();
-            let utf8_string = String::from_utf8_lossy(&data_vec);
-            let parts: Vec<&str> = utf8_string.split('\0').collect();
-            if parts.len() > 1 {
-                return Ok(parts[0].to_string());
+            let mut parts = data_vec.split(|&b| b == 0);
+            if let Some(first_part_bytes) = parts.next() {
+                if !first_part_bytes.is_empty() {
+                    return Ok(String::from_utf8_lossy(first_part_bytes).into_owned());
+                }
+                if let Some(second_part_bytes) = parts.next() {
+                    if !second_part_bytes.is_empty() {
+                        return Ok(String::from_utf8_lossy(second_part_bytes).into_owned());
+                    }
+                }
             }
         }
 
@@ -145,74 +146,84 @@ impl X11Manager {
     fn is_window_focused(
         &self,
         window: Window,
-        atoms: &HashMap<&str, u32>,
+        atoms: &HashMap<&str, Atom>,
     ) -> Result<bool, Box<dyn std::error::Error>> {
-        let net_active_window_atom = atoms["_NET_ACTIVE_WINDOW"];
+        let net_active_window_atom = atoms
+            .get("_NET_ACTIVE_WINDOW")
+            .ok_or("_NET_ACTIVE_WINDOW atom not found")?;
         let active_window_reply = self
             .conn
             .get_property(
                 false,
-                self.conn.setup().roots[0].root,
-                net_active_window_atom,
+                self.root,
+                *net_active_window_atom,
                 AtomEnum::WINDOW,
                 0,
                 1,
             )?
             .reply()?;
 
-        Ok(active_window_reply
-            .value32()
-            .map(|mut v| v.next() == Some(window))
-            .unwrap_or(false))
+        Ok(active_window_reply.value32().and_then(|mut v| v.next()) == Some(window))
     }
 
-    fn minimize_window(
+    fn change_net_wm_state(
         &self,
-        window: Window,
-        atoms: &HashMap<&str, u32>,
+        win: Window,
+        action: u32,
+        property_atom: Atom,
+        atoms: &HashMap<&str, Atom>,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let net_wm_state_atom = atoms["_NET_WM_STATE"];
-        let net_wm_state_hidden_atom = atoms["_NET_WM_STATE_HIDDEN"];
-        let root = self.conn.setup().roots[0].root;
+        let net_wm_state_atom = atoms
+            .get("_NET_WM_STATE")
+            .ok_or("_NET_WM_STATE atom not found")?;
 
         let event = ClientMessageEvent {
-            response_type: x11rb::protocol::xproto::CLIENT_MESSAGE_EVENT,
+            response_type: CLIENT_MESSAGE_EVENT,
             format: 32,
-            window,
-            type_: net_wm_state_atom,
-            data: [1, net_wm_state_hidden_atom, 0, 0, 0].into(),
             sequence: 0,
+            window: win,
+            type_: *net_wm_state_atom,
+            data: ClientMessageData::from([action, property_atom, 0, 2, 0]),
         };
 
         self.conn.send_event(
             false,
-            root,
+            self.root,
             EventMask::SUBSTRUCTURE_REDIRECT | EventMask::SUBSTRUCTURE_NOTIFY,
             event,
         )?;
         Ok(())
     }
 
-    fn focus_window(
+    fn activate_window_ewmh(
         &self,
         window: Window,
-        atoms: &HashMap<&str, u32>,
+        atoms: &HashMap<&str, Atom>,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let net_active_window_atom = atoms["_NET_ACTIVE_WINDOW"];
-        let root = self.conn.setup().roots[0].root;
+        let net_active_window_atom = atoms
+            .get("_NET_ACTIVE_WINDOW")
+            .ok_or("_NET_ACTIVE_WINDOW atom not found")?;
+
+        let current_active_window_for_source: u32 = 0;
 
         let event = ClientMessageEvent {
-            response_type: x11rb::protocol::xproto::CLIENT_MESSAGE_EVENT,
+            response_type: CLIENT_MESSAGE_EVENT,
             format: 32,
-            window,
-            type_: net_active_window_atom,
-            data: [1, 0, 0, 0, 0].into(),
             sequence: 0,
+            window,
+            type_: *net_active_window_atom,
+            data: ClientMessageData::from([
+                2,
+                CURRENT_TIME,
+                current_active_window_for_source,
+                0,
+                0,
+            ]),
         };
 
         self.conn.send_event(
             false,
-            root,
+            self.root,
             EventMask::SUBSTRUCTURE_REDIRECT | EventMask::SUBSTRUCTURE_NOTIFY,
             event,
         )?;
@@ -228,9 +239,9 @@ impl X11Manager {
         if attributes.override_redirect {
             return Ok(false);
         }
-        if attributes.map_state != MapState::VIEWABLE {
-            return Ok(false);
-        }
+        // if attributes.map_state != MapState::VIEWABLE {
+        //     return Ok(false);
+        // }
 
         // Verificar el tipo de ventana
         if let Some(net_wm_window_type_atom) = atoms.get("_NET_WM_WINDOW_TYPE") {
@@ -301,33 +312,42 @@ impl X11Manager {
 impl WindowManagerBackend for X11Manager {
     fn get_window_list(&self) -> Result<Vec<WindowInfo>, Box<dyn std::error::Error>> {
         let atoms = self.get_required_atoms()?;
+        let net_client_list_atom = atoms
+            .get("_NET_CLIENT_LIST")
+            .ok_or("_NET_CLIENT_LIST atom not found")?;
+        let net_wm_state_hidden_atom = atoms
+            .get("_NET_WM_STATE_HIDDEN")
+            .ok_or("_NET_WM_STATE_HIDDEN atom not found")?;
+
         let reply = self
             .conn
             .get_property(
                 false,
                 self.root,
-                atoms["_NET_CLIENT_LIST"],
+                *net_client_list_atom,
                 AtomEnum::WINDOW,
                 0,
                 u32::MAX,
             )?
             .reply()?;
 
-        let windows: Vec<Window> = reply.value32().map_or_else(Vec::new, |iter| iter.collect());
+        let windows_prop: Vec<Window> =
+            reply.value32().map_or_else(Vec::new, |iter| iter.collect());
         let mut window_list = Vec::new();
 
-        for win in windows {
-            let title = self.get_window_title(win, &atoms)?;
-            let state = self.get_window_state(win, &atoms)?;
-
+        for win in windows_prop {
             if !self.should_show_window(win, &atoms)? {
                 continue;
             }
+            let title = self.get_window_title(win, &atoms).unwrap_or_default();
+            let state = self.get_window_state(win, &atoms)?;
+            let class_name = self.get_window_class(win).unwrap_or_default();
+
             window_list.push(WindowInfo {
                 id: win.to_string(),
                 title,
-                is_minimized: state.contains(&atoms["_NET_WM_STATE_HIDDEN"]),
-                icon: self.get_window_class(win)?,
+                is_minimized: state.contains(net_wm_state_hidden_atom),
+                icon: class_name,
             });
         }
 
@@ -335,26 +355,56 @@ impl WindowManagerBackend for X11Manager {
     }
 
     fn toggle_window(&self, win_id: &str) -> Result<(), Box<dyn std::error::Error>> {
-        let win = win_id.parse::<u32>()?;
+        let window_to_toggle = win_id.parse::<Window>()?;
         let atoms = self.get_required_atoms()?;
-        let root = self.conn.setup().roots[0].root;
 
-        let event = ClientMessageEvent {
-            response_type: CLIENT_MESSAGE_EVENT,
-            format: 32,
-            window: win,
-            type_: atoms["_NET_ACTIVE_WINDOW"],
-            data: [1, 0, 0, 0, 0].into(),
-            sequence: 0,
-        };
+        let net_wm_state_hidden_atom =
+            atoms.get("_NET_WM_STATE_HIDDEN").copied().ok_or_else(|| {
+                Into::<Box<dyn std::error::Error>>::into("_NET_WM_STATE_HIDDEN atom not found")
+            })?;
+        
+        let net_wm_state_demands_attention_atom = atoms.get("_NET_WM_STATE_DEMANDS_ATTENTION").copied();
 
-        self.conn.send_event(
-            false,
-            root,
-            EventMask::SUBSTRUCTURE_REDIRECT | EventMask::SUBSTRUCTURE_NOTIFY,
-            event,
-        )?;
 
+        let window_state = self.get_window_state(window_to_toggle, &atoms)?;
+        let is_hidden = window_state.contains(&net_wm_state_hidden_atom);
+
+        eprintln!("[toggle_window] ID: {}, IsHidden: {}", win_id, is_hidden);
+
+        if is_hidden {
+            eprintln!("[toggle_window] Ventana está oculta. Intentando desminimizar y activar.");
+            self.change_net_wm_state(window_to_toggle, 0, net_wm_state_hidden_atom, &atoms)?; // 0 = remove state
+            
+            if let Some(da_atom) = net_wm_state_demands_attention_atom {
+                eprintln!("[toggle_window] Añadiendo DEMANDS_ATTENTION");
+                self.change_net_wm_state(window_to_toggle, 1, da_atom, &atoms)?; // 1 = add state
+            }
+
+            self.activate_window_ewmh(window_to_toggle, &atoms)?;
+
+            if let Some(da_atom) = net_wm_state_demands_attention_atom {
+                 eprintln!("[toggle_window] Quitando DEMANDS_ATTENTION");
+                self.change_net_wm_state(window_to_toggle, 0, da_atom, &atoms)?; // 0 = remove state
+            }
+
+        } else {
+            let is_focused = self.is_window_focused(window_to_toggle, &atoms)?;
+            eprintln!("[toggle_window] Ventana no oculta. IsFocused: {}", is_focused);
+            if is_focused {
+                eprintln!("[toggle_window] Ventana visible y enfocada. Intentando minimizar.");
+                self.change_net_wm_state(window_to_toggle, 1, net_wm_state_hidden_atom, &atoms)?; // 1 = add state
+            } else {
+                eprintln!("[toggle_window] Ventana visible pero no enfocada. Intentando activar.");
+                if let Some(da_atom) = net_wm_state_demands_attention_atom {
+                    if window_state.contains(&da_atom) { // Solo quitar si estaba puesto
+                        self.change_net_wm_state(window_to_toggle, 0, da_atom, &atoms)?;
+                    }
+                }
+                self.activate_window_ewmh(window_to_toggle, &atoms)?;
+            }
+        }
+        self.conn.flush()?;
+        eprintln!("[toggle_window] Operación completada para ID: {}", win_id);
         Ok(())
     }
 
