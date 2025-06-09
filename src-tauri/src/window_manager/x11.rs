@@ -1,6 +1,7 @@
 use super::{WindowInfo, WindowManagerBackend};
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, Ordering};
+// Ordering ya no es necesario si quitamos AtomicBool
+// use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::Sender;
 use std::sync::Arc;
 use std::thread;
@@ -12,7 +13,7 @@ use x11rb::CURRENT_TIME;
 pub struct X11Manager {
     conn: Arc<x11rb::rust_connection::RustConnection>,
     root: Window,
-    running: Arc<AtomicBool>,
+    atoms: HashMap<&'static str, Atom>, // Átomos cacheados
 }
 
 impl X11Manager {
@@ -20,92 +21,89 @@ impl X11Manager {
         let (conn, screen_num) = x11rb::connect(None)?;
         let screen = &conn.setup().roots[screen_num];
         let root = screen.root;
-        let conn = Arc::new(conn);
+        let conn_arc = Arc::new(conn);
 
-        // Inicializar GTK solo si no está inicializado
-        if gtk::is_initialized() == false {
-            if let Err(e) = gtk::init() {
-                eprintln!("Failed to initialize GTK: {}", e);
-            }
-        }
-
-        Ok(X11Manager {
-            conn,
-            root,
-            running: Arc::new(AtomicBool::new(true)),
-        })
-    }
-
-    fn get_required_atoms(
-        &self,
-    ) -> Result<HashMap<&'static str, Atom>, Box<dyn std::error::Error>> {
         let atom_names = [
             "_NET_CLIENT_LIST",
             "_NET_WM_NAME",
+            "WM_NAME",
+            "UTF8_STRING",
             "_NET_WM_STATE",
             "_NET_WM_STATE_HIDDEN",
             "_NET_WM_STATE_SKIP_TASKBAR",
-            "_NET_WM_STATE_SKIP_PAGER",
+            // "_NET_WM_STATE_SKIP_PAGER",
             "_NET_WM_STATE_MODAL",
+            "_NET_WM_STATE_DEMANDS_ATTENTION",
+            "_NET_ACTIVE_WINDOW",
             "_NET_WM_WINDOW_TYPE",
             "_NET_WM_WINDOW_TYPE_DOCK",
             "_NET_WM_WINDOW_TYPE_DESKTOP",
-            "_NET_WM_WINDOW_TYPE_NOTIFICATION",
             "_NET_WM_WINDOW_TYPE_TOOLBAR",
             "_NET_WM_WINDOW_TYPE_MENU",
             "_NET_WM_WINDOW_TYPE_SPLASH",
             "_NET_WM_WINDOW_TYPE_DIALOG",
             "_NET_WM_WINDOW_TYPE_UTILITY",
             "_NET_WM_WINDOW_TYPE_TOOLTIP",
+            "_NET_WM_WINDOW_TYPE_NOTIFICATION",
+            "_NET_WM_WINDOW_TYPE_DROPDOWN_MENU",
             "_NET_WM_WINDOW_TYPE_POPUP_MENU",
-            "_NET_WM_STATE_DEMANDS_ATTENTION",
-            "UTF8_STRING",
-            "_NET_ACTIVE_WINDOW",
+            "WM_CLASS",
         ];
 
         let mut atoms = HashMap::new();
         for name in atom_names.iter() {
-            let reply = self.conn.intern_atom(false, name.as_bytes())?.reply()?;
-            atoms.insert(*name, reply.atom);
+            let interned_atom = conn_arc.intern_atom(false, name.as_bytes())?.reply()?;
+            atoms.insert(*name, interned_atom.atom);
         }
-        Ok(atoms)
+
+        Ok(X11Manager {
+            conn: conn_arc,
+            root,
+            atoms,
+        })
     }
 
-    fn get_window_title(
-        &self,
-        win: Window,
-        atoms: &HashMap<&str, Atom>,
-    ) -> Result<String, Box<dyn std::error::Error>> {
-        let reply = self
-            .conn
-            .get_property(
-                false,
-                win,
-                atoms["_NET_WM_NAME"],
-                atoms["UTF8_STRING"],
-                0,
-                u32::MAX,
-            )?
-            .reply()?;
+    fn get_window_title(&self, win: Window) -> Result<String, Box<dyn std::error::Error>> {
+        if let Some(net_wm_name_atom) = self.atoms.get("_NET_WM_NAME") {
+            if let Some(utf8_string_atom) = self.atoms.get("UTF8_STRING") {
+                let reply = self
+                    .conn
+                    .get_property(
+                        false,
+                        win,
+                        *net_wm_name_atom,
+                        *utf8_string_atom,
+                        0,
+                        u32::MAX,
+                    )?
+                    .reply()?;
+                if !reply.value.is_empty() {
+                    return Ok(String::from_utf8_lossy(&reply.value).into_owned());
+                }
+            }
+        }
 
-        Ok(String::from_utf8_lossy(&reply.value).into_owned())
+        if let Some(wm_name_atom) = self.atoms.get("WM_NAME") {
+            let reply = self
+                .conn
+                .get_property(false, win, *wm_name_atom, AtomEnum::STRING, 0, u32::MAX)?
+                .reply()?;
+            if !reply.value.is_empty() {
+                return Ok(String::from_utf8_lossy(&reply.value).into_owned()); // from_utf8_lossy es seguro
+            }
+        }
+
+        Ok(String::new())
     }
 
-    fn get_window_state(
-        &self,
-        win: Window,
-        atoms: &HashMap<&str, Atom>,
-    ) -> Result<Vec<Atom>, Box<dyn std::error::Error>> {
+    fn get_window_state(&self, win: Window) -> Result<Vec<Atom>, Box<dyn std::error::Error>> {
+        let net_wm_state_atom = self
+            .atoms
+            .get("_NET_WM_STATE")
+            .ok_or("_NET_WM_STATE atom not found in cache")?;
         let reply = self
             .conn
-            .get_property(
-                false,
-                win,
-                atoms["_NET_WM_STATE"],
-                AtomEnum::ATOM,
-                0,
-                u32::MAX,
-            )?
+            .get_property(false, win, *net_wm_state_atom, AtomEnum::ATOM, 0, u32::MAX)?
             .reply()?;
 
         Ok(reply
@@ -143,14 +141,11 @@ impl X11Manager {
         Ok(String::new())
     }
 
-    fn is_window_focused(
-        &self,
-        window: Window,
-        atoms: &HashMap<&str, Atom>,
-    ) -> Result<bool, Box<dyn std::error::Error>> {
-        let net_active_window_atom = atoms
+    fn is_window_focused(&self, window: Window) -> Result<bool, Box<dyn std::error::Error>> {
+        let net_active_window_atom = self
+            .atoms
             .get("_NET_ACTIVE_WINDOW")
-            .ok_or("_NET_ACTIVE_WINDOW atom not found")?;
+            .ok_or("_NET_ACTIVE_WINDOW atom not found in cache")?;
         let active_window_reply = self
             .conn
             .get_property(
@@ -171,11 +166,11 @@ impl X11Manager {
         win: Window,
         action: u32,
         property_atom: Atom,
-        atoms: &HashMap<&str, Atom>,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let net_wm_state_atom = atoms
+        let net_wm_state_atom = self
+            .atoms
             .get("_NET_WM_STATE")
-            .ok_or("_NET_WM_STATE atom not found")?;
+            .ok_or("_NET_WM_STATE atom not found in cache")?;
 
         let event = ClientMessageEvent {
             response_type: CLIENT_MESSAGE_EVENT,
@@ -195,14 +190,11 @@ impl X11Manager {
         Ok(())
     }
 
-    fn activate_window_ewmh(
-        &self,
-        window: Window,
-        atoms: &HashMap<&str, Atom>,
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        let net_active_window_atom = atoms
+    fn activate_window_ewmh(&self, window: Window) -> Result<(), Box<dyn std::error::Error>> {
+        let net_active_window_atom = self
+            .atoms
             .get("_NET_ACTIVE_WINDOW")
-            .ok_or("_NET_ACTIVE_WINDOW atom not found")?;
+            .ok_or("_NET_ACTIVE_WINDOW atom not found in cache")?;
 
         let current_active_window_for_source: u32 = 0;
 
@@ -230,21 +222,13 @@ impl X11Manager {
         Ok(())
     }
 
-    fn should_show_window(
-        &self,
-        win: Window,
-        atoms: &HashMap<&str, Atom>,
-    ) -> Result<bool, Box<dyn std::error::Error>> {
+    fn should_show_window(&self, win: Window) -> Result<bool, Box<dyn std::error::Error>> {
         let attributes = self.conn.get_window_attributes(win)?.reply()?;
         if attributes.override_redirect {
             return Ok(false);
         }
-        // if attributes.map_state != MapState::VIEWABLE {
-        //     return Ok(false);
-        // }
 
-        // Verificar el tipo de ventana
-        if let Some(net_wm_window_type_atom) = atoms.get("_NET_WM_WINDOW_TYPE") {
+        if let Some(net_wm_window_type_atom) = self.atoms.get("_NET_WM_WINDOW_TYPE") {
             if let Ok(reply) = self
                 .conn
                 .get_property(
@@ -259,21 +243,16 @@ impl X11Manager {
             {
                 if let Some(types) = reply.value32() {
                     for window_type_atom_value in types {
-                        if Some(&window_type_atom_value) == atoms.get("_NET_WM_WINDOW_TYPE_DOCK")
-                            || Some(&window_type_atom_value)
-                                == atoms.get("_NET_WM_WINDOW_TYPE_TOOLBAR")
-                            || Some(&window_type_atom_value)
-                                == atoms.get("_NET_WM_WINDOW_TYPE_DESKTOP")
-                            || Some(&window_type_atom_value)
-                                == atoms.get("_NET_WM_WINDOW_TYPE_SPLASH")
-                            || Some(&window_type_atom_value)
-                                == atoms.get("_NET_WM_WINDOW_TYPE_UTILITY")
-                            || Some(&window_type_atom_value)
-                                == atoms.get("_NET_WM_WINDOW_TYPE_DROPDOWN_MENU")
-                            || Some(&window_type_atom_value)
-                                == atoms.get("_NET_WM_WINDOW_TYPE_POPUP_MENU")
-                            || Some(&window_type_atom_value)
-                                == atoms.get("_NET_WM_WINDOW_TYPE_NOTIFICATION")
+                        if Some(&window_type_atom_value) == self.atoms.get("_NET_WM_WINDOW_TYPE_DOCK")
+                            || Some(&window_type_atom_value) == self.atoms.get("_NET_WM_WINDOW_TYPE_TOOLBAR")
+                            || Some(&window_type_atom_value) == self.atoms.get("_NET_WM_WINDOW_TYPE_DESKTOP")
+                            || Some(&window_type_atom_value) == self.atoms.get("_NET_WM_WINDOW_TYPE_SPLASH")
+                            || Some(&window_type_atom_value) == self.atoms.get("_NET_WM_WINDOW_TYPE_UTILITY") // Decidir si filtrar
+                            || Some(&window_type_atom_value) == self.atoms.get("_NET_WM_WINDOW_TYPE_DROPDOWN_MENU")
+                            || Some(&window_type_atom_value) == self.atoms.get("_NET_WM_WINDOW_TYPE_POPUP_MENU")
+                            || Some(&window_type_atom_value) == self.atoms.get("_NET_WM_WINDOW_TYPE_TOOLTIP")
+                            || Some(&window_type_atom_value) == self.atoms.get("_NET_WM_WINDOW_TYPE_NOTIFICATION")
+                            || Some(&window_type_atom_value) == self.atoms.get("_NET_WM_WINDOW_TYPE_MENU")
                         {
                             return Ok(false);
                         }
@@ -282,7 +261,13 @@ impl X11Manager {
             }
         }
 
-        // Verificar la clase de la ventana
+        let window_state = self.get_window_state(win)?; // Llama a la versión que usa self.atoms
+        if let Some(skip_taskbar_atom) = self.atoms.get("_NET_WM_STATE_SKIP_TASKBAR") {
+            if window_state.contains(skip_taskbar_atom) {
+                return Ok(false);
+            }
+        }
+
         let class_name = self.get_window_class(win)?;
         let skip_classes = [
             "vpanel",
@@ -297,7 +282,6 @@ impl X11Manager {
             "vmenu",
             "vasak-control-center",
         ];
-
         if skip_classes
             .iter()
             .any(|c| class_name.to_lowercase().contains(c))
@@ -311,13 +295,15 @@ impl X11Manager {
 
 impl WindowManagerBackend for X11Manager {
     fn get_window_list(&self) -> Result<Vec<WindowInfo>, Box<dyn std::error::Error>> {
-        let atoms = self.get_required_atoms()?;
-        let net_client_list_atom = atoms
+        // get_required_atoms ya no se llama aquí
+        let net_client_list_atom = self
+            .atoms
             .get("_NET_CLIENT_LIST")
-            .ok_or("_NET_CLIENT_LIST atom not found")?;
-        let net_wm_state_hidden_atom = atoms
+            .ok_or("_NET_CLIENT_LIST atom not found in cache")?;
+        let net_wm_state_hidden_atom = self
+            .atoms
             .get("_NET_WM_STATE_HIDDEN")
-            .ok_or("_NET_WM_STATE_HIDDEN atom not found")?;
+            .ok_or("_NET_WM_STATE_HIDDEN atom not found in cache")?;
 
         let reply = self
             .conn
@@ -336,11 +322,12 @@ impl WindowManagerBackend for X11Manager {
         let mut window_list = Vec::new();
 
         for win in windows_prop {
-            if !self.should_show_window(win, &atoms)? {
+            if !self.should_show_window(win)? {
+                // Llama a la versión que usa self.atoms
                 continue;
             }
-            let title = self.get_window_title(win, &atoms).unwrap_or_default();
-            let state = self.get_window_state(win, &atoms)?;
+            let title = self.get_window_title(win).unwrap_or_default(); // Llama a la versión que usa self.atoms
+            let state = self.get_window_state(win)?; // Llama a la versión que usa self.atoms
             let class_name = self.get_window_class(win).unwrap_or_default();
 
             window_list.push(WindowInfo {
@@ -356,86 +343,86 @@ impl WindowManagerBackend for X11Manager {
 
     fn toggle_window(&self, win_id: &str) -> Result<(), Box<dyn std::error::Error>> {
         let window_to_toggle = win_id.parse::<Window>()?;
-        let atoms = self.get_required_atoms()?;
 
         let net_wm_state_hidden_atom =
-            atoms.get("_NET_WM_STATE_HIDDEN").copied().ok_or_else(|| {
-                Into::<Box<dyn std::error::Error>>::into("_NET_WM_STATE_HIDDEN atom not found")
-            })?;
-        
-        let net_wm_state_demands_attention_atom = atoms.get("_NET_WM_STATE_DEMANDS_ATTENTION").copied();
+            self.atoms
+                .get("_NET_WM_STATE_HIDDEN")
+                .copied()
+                .ok_or_else(|| {
+                    Into::<Box<dyn std::error::Error>>::into(
+                        "_NET_WM_STATE_HIDDEN atom not found in cache",
+                    )
+                })?;
 
+        let net_wm_state_demands_attention_atom =
+            self.atoms.get("_NET_WM_STATE_DEMANDS_ATTENTION").copied();
 
-        let window_state = self.get_window_state(window_to_toggle, &atoms)?;
+        let window_state = self.get_window_state(window_to_toggle)?; // Llama a la versión que usa self.atoms
         let is_hidden = window_state.contains(&net_wm_state_hidden_atom);
 
-        eprintln!("[toggle_window] ID: {}, IsHidden: {}", win_id, is_hidden);
-
         if is_hidden {
-            eprintln!("[toggle_window] Ventana está oculta. Intentando desminimizar y activar.");
-            self.change_net_wm_state(window_to_toggle, 0, net_wm_state_hidden_atom, &atoms)?; // 0 = remove state
-            
-            if let Some(da_atom) = net_wm_state_demands_attention_atom {
-                eprintln!("[toggle_window] Añadiendo DEMANDS_ATTENTION");
-                self.change_net_wm_state(window_to_toggle, 1, da_atom, &atoms)?; // 1 = add state
-            }
-
-            self.activate_window_ewmh(window_to_toggle, &atoms)?;
+            self.change_net_wm_state(window_to_toggle, 0, net_wm_state_hidden_atom)?;
 
             if let Some(da_atom) = net_wm_state_demands_attention_atom {
-                 eprintln!("[toggle_window] Quitando DEMANDS_ATTENTION");
-                self.change_net_wm_state(window_to_toggle, 0, da_atom, &atoms)?; // 0 = remove state
+                self.change_net_wm_state(window_to_toggle, 1, da_atom)?;
             }
 
+            self.activate_window_ewmh(window_to_toggle)?;
+
+            if let Some(da_atom) = net_wm_state_demands_attention_atom {
+                self.change_net_wm_state(window_to_toggle, 0, da_atom /* &self.atoms */)?;
+            }
         } else {
-            let is_focused = self.is_window_focused(window_to_toggle, &atoms)?;
-            eprintln!("[toggle_window] Ventana no oculta. IsFocused: {}", is_focused);
+            let is_focused = self.is_window_focused(window_to_toggle)?;
             if is_focused {
-                eprintln!("[toggle_window] Ventana visible y enfocada. Intentando minimizar.");
-                self.change_net_wm_state(window_to_toggle, 1, net_wm_state_hidden_atom, &atoms)?; // 1 = add state
+                self.change_net_wm_state(window_to_toggle, 1, net_wm_state_hidden_atom)?;
             } else {
-                eprintln!("[toggle_window] Ventana visible pero no enfocada. Intentando activar.");
                 if let Some(da_atom) = net_wm_state_demands_attention_atom {
-                    if window_state.contains(&da_atom) { // Solo quitar si estaba puesto
-                        self.change_net_wm_state(window_to_toggle, 0, da_atom, &atoms)?;
+                    if window_state.contains(&da_atom) {
+                        self.change_net_wm_state(window_to_toggle, 0, da_atom)?;
                     }
                 }
-                self.activate_window_ewmh(window_to_toggle, &atoms)?;
+                self.activate_window_ewmh(window_to_toggle)?;
             }
         }
         self.conn.flush()?;
-        eprintln!("[toggle_window] Operación completada para ID: {}", win_id);
         Ok(())
     }
 
     fn setup_event_monitoring(&mut self, tx: Sender<()>) -> Result<(), Box<dyn std::error::Error>> {
-        let conn = self.conn.clone();
-        let events = EventMask::STRUCTURE_NOTIFY
-            | EventMask::PROPERTY_CHANGE
-            | EventMask::SUBSTRUCTURE_NOTIFY;
+        let conn_clone = self.conn.clone();
+        let root_window = self.root;
 
-        conn.change_window_attributes(
-            self.root,
-            &ChangeWindowAttributesAux::new().event_mask(events),
+        let event_mask = EventMask::SUBSTRUCTURE_NOTIFY | EventMask::PROPERTY_CHANGE;
+        conn_clone.change_window_attributes(
+            root_window,
+            &ChangeWindowAttributesAux::new().event_mask(event_mask),
         )?;
+        conn_clone.flush()?;
 
         thread::spawn(move || {
-            while let Ok(event) = conn.wait_for_event() {
-                match event {
-                    Event::CreateNotify(_) | Event::DestroyNotify(_) | Event::PropertyNotify(_) => {
-                        let _ = tx.send(());
+            loop {
+                match conn_clone.wait_for_event() {
+                    Ok(event) => {
+                        match event {
+                            Event::PropertyNotify(_ev) => {
+                                if tx.send(()).is_err() { break; }
+                            }
+                            Event::CreateNotify(_) // CreateNotify, DestroyNotify, etc. en hijos de root
+                            | Event::DestroyNotify(_) => {
+                                if tx.send(()).is_err() { break; }
+                            }
+                            _ => {}
+                        }
                     }
-                    _ => {}
+                    Err(_) => {
+                        eprintln!("[EventMonitor] Error esperando evento o conexión cerrada.");
+                        break;
+                    }
                 }
             }
         });
 
         Ok(())
-    }
-}
-
-impl Drop for X11Manager {
-    fn drop(&mut self) {
-        self.running.store(false, Ordering::SeqCst);
     }
 }
