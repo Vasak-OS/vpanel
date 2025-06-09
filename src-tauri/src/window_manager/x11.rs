@@ -42,46 +42,6 @@ impl X11Manager {
         })
     }
 
-    fn get_window_icon(&self, class_name: &str) -> Option<String> {
-        // Primero intentar obtener del cache
-        if let Ok(cache) = self.icon_cache.lock() {
-            if let Some(icon) = cache.get(class_name) {
-                return Some(icon.clone());
-            }
-        }
-
-        // Si no está en cache, buscar el icono
-        if gtk::is_initialized() {
-            if let Some(icon_theme) = IconTheme::default() {
-                let icon_names = [
-                    class_name.to_lowercase(),
-                    format!("{}.desktop", class_name.to_lowercase()),
-                    format!("{}-symbolic", class_name.to_lowercase()),
-                    "application-x-executable".to_string(),
-                ];
-
-                for icon_name in icon_names.iter() {
-                    if let Some(icon_info) =
-                        icon_theme.lookup_icon(icon_name, 48, gtk::IconLookupFlags::FORCE_SIZE)
-                    {
-                        if let Some(path) = icon_info.filename() {
-                            if let Ok(icon_data) = std::fs::read(path) {
-                                let icon_base64 = BASE64.encode(&icon_data);
-                                // Guardar en cache
-                                if let Ok(mut cache) = self.icon_cache.lock() {
-                                    cache.insert(class_name.to_string(), icon_base64.clone());
-                                }
-                                return Some(icon_base64);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        None
-    }
-
     fn get_required_atoms(
         &self,
     ) -> Result<HashMap<&'static str, Atom>, Box<dyn std::error::Error>> {
