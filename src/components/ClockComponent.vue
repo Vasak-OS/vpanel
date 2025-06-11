@@ -38,10 +38,10 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="px-2 font-mono text-sm">
+  <div class="flex items-center p-1 font-mono text-sm">
     <span 
       :title="`${timeData.day}/${timeData.month}/${timeData.year}`"
-      class="transition-all duration-300 hover:text-white/80 cursor-default animate-pulse"
+      class="cursor-default animate-pulse"
     >
       {{ timeData.hour }}:{{ timeData.minute }}
     </span>

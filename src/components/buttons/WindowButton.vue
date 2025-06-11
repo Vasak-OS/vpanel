@@ -38,15 +38,13 @@ onMounted(async () => {
       v-if="icon && iconSource" 
       :src="iconSource" 
       :alt="title"
+      :title="title"
       class="w-6 h-6 transition-all duration-300 group-hover:rotate-3 group-hover:brightness-110"
     />
     <div 
       v-else 
       class="w-6 h-6 bg-gray-500/50 rounded-md animate-pulse" 
     />
-    <div class="absolute -top-2 z-20 opacity-0 group-hover:opacity-100 transition-all duration-300 text-xs px-2 py-0.5 bg-black/80 rounded-md whitespace-nowrap pointer-events-none transform group-hover:translate-y-5 backdrop-blur-sm">
-      {{ title }}
-    </div>
   </div>
 </template>
 

@@ -62,7 +62,7 @@ onUnmounted(() => {
     <img :src="menuIcon"  alt="Menu" @click="openMenu"
       class="app-icon" />
     <WindowsArea />
-    <div class="flex items-center">
+    <div class="flex content-center items-center">
       <TrayPanel />
       <ClockComponent />
       <img :src="notifyIcon"  alt="Menu" @click="openNotificationCenter"
