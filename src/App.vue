@@ -45,7 +45,6 @@ onMounted(async () => {
   configStore.loadConfig();
   unlistenConfig = await listen('config-changed', async () => {
     configStore.loadConfig();
-    console.log('Config changed');
   });
 });
 
@@ -78,7 +77,7 @@ onUnmounted(() => {
   @apply flex justify-between items-center mx-1 bg-white/70 dark:bg-black/70 hover:bg-white/80 hover:dark:bg-black/80;
   height: 30px;
   padding: 2px;
-  border-radius: calc(var(--vsk-border-radius) + 2px);
+  border-radius: calc(var(--border-radius) + 2px);
 }
 
 .vpanel .app-icon {

@@ -1,15 +1,15 @@
 @import "tailwindcss";
 
 :root {
-  --color-primary: #1d4ed8;
-  --vsk-border-radius: 10px;
+  --primary-color: #1d4ed8;
+  --border-radius: 10px;
 }
 
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
-  --radius-vsk: var(--vsk-border-radius);
-  --color-vsk-primary: var(--color-primary);
+  --radius-vsk: var(--border-radius);
+  --color-vsk-primary: var(--primary-color);
 }
 
 body *{
