@@ -17,6 +17,7 @@
     "positioner:allow-move-window",
     "positioner:allow-set-tray-icon-state",
     "vicons:default",
+    "config-manager:default",
     {
       "identifier": "shell:allow-execute",
       "allow": [

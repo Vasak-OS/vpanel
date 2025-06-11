@@ -4,6 +4,7 @@ use std::sync::mpsc::channel;
 use std::sync::{Arc, Mutex};
 use tauri::{Manager, Emitter, generate_context};
 use tauri_plugin_positioner::{Position, WindowExt};
+use tauri_plugin_config_manager;
 use window_manager::{WindowInfo, WindowManager};
 
 // Estado principal de la aplicación
@@ -66,6 +67,7 @@ pub fn run() {
         .manage(app_state)
         .plugin(tauri_plugin_positioner::init())
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_config_manager::init())
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.set_focus();
