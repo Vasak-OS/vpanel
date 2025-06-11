@@ -6,7 +6,7 @@ import WindowsArea from '@/components/WindowsArea.vue';
 import TrayPanel from '@/components/TrayPanel.vue';
 import ClockComponent from '@/components/ClockComponent.vue';
 import { getIconSource } from '@vasakgroup/plugin-vicons'
-import { useConfigStore } from "./store/configStore";
+import { useConfigStore } from "@vasakgroup/plugin-config-manager";
 import { listen } from "@tauri-apps/api/event";
 
 const menuIcon: Ref<string> = ref('');
