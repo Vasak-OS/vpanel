@@ -82,6 +82,6 @@ onUnmounted(() => {
 }
 
 .vpanel .app-icon {
-  @apply h-6 w-6 cursor-pointer p-0.5 rounded-vsk hover:bg-vsk-primary/30 transform hover:scale-110 active:scale-95;
+  @apply h-6 w-6 cursor-pointer p-0.5 rounded-vsk hover:bg-vsk-primary/30 transform hover:scale-110 active:scale-95 ease-in-out;
 }
 </style>
