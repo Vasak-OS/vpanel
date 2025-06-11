@@ -34,11 +34,11 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="flex items-center justify-center gap-0.5 flex-grow mx-2 overflow-x-auto overflow-y-hidden scrollbar-thin scrollbar-thumb-white/20 scrollbar-track-transparent">
+  <div class="flex items-center justify-center flex-grow overflow-x-auto overflow-y-hidden scrollbar-thin scrollbar-thumb-white/20 scrollbar-track-transparent">
     <TransitionGroup 
       name="window-list"
       tag="div"
-      class="flex items-center gap-0.5"
+      class="flex items-center justify-center gap-0.5"
     >
       <WindowButton
         v-for="window in windows"
@@ -49,16 +49,7 @@ onUnmounted(() => {
   </div>
 </template>
 
-<style scoped>
-.windows-container {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 2px;
-  flex-grow: 1;
-  margin: 0 8px;
-}
-
+<style >
 .window-list-move {
   transition: transform 0.3s ease;
 }

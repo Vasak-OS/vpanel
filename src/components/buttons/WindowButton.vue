@@ -30,7 +30,7 @@ onMounted(async () => {
 
 <template>
   <div
-    class="group flex items-center justify-center w-10 h-10 cursor-pointer transform transition-all duration-300 rounded-lg hover:bg-white/10 hover:scale-110 active:scale-95 relative"
+    class="window-button"
     :class="{ 'opacity-50 hover:opacity-90': is_minimized }"
     @click="toggleWindow"
   >
@@ -50,22 +50,13 @@ onMounted(async () => {
   </div>
 </template>
 
-<style scoped>
+<style>
+@reference "../../style.css";
+
 .window-button {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 40px;
-  height: 40px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  border-radius: 8px;
+  @apply flex items-center justify-center w-7 h-7 cursor-pointer transform rounded-vsk hover:bg-vsk-primary/30 hover:scale-110 active:scale-95 relative;
 }
 
-.window-button:hover {
-  background-color: rgba(255, 255, 255, 0.1);
-  transform: scale(1.3);
-}
 
 .window-minimized {
   opacity: 0.5;
