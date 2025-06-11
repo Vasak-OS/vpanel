@@ -3809,6 +3809,7 @@ dependencies = [
 [[package]]
 name = "tauri-plugin-config-manager"
 version = "2.0.0"
+source = "git+https://github.com/Vasak-OS/tauri-plugin-config-manager?branch=v2#8ba75d44b711328d58d61d13a82e787aa748fc65"
 dependencies = [
  "dirs-next",
  "notify",
