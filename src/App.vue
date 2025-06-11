@@ -58,49 +58,30 @@ onUnmounted(() => {
 
 <template>
   <nav
-    class="flex justify-between items-center px-1 mx-1 bg-white/70 dark:bg-black/70 text-black dark:text-white h-[30px] rounded-xl backdrop-blur-md transition-all duration-300 hover:bg-white/80 hover:dark:bg-black/80">
+    class="vpanel">
     <img :src="menuIcon"  alt="Menu" @click="openMenu"
-      class="h-7 w-7 cursor-pointer p-1.5 rounded-lg hover:bg-white/10 transform transition-all duration-200 hover:scale-110 active:scale-95" />
+      class="app-icon" />
     <WindowsArea />
-    <div class="flex items-center gap-2">
+    <div class="flex items-center">
       <TrayPanel />
       <ClockComponent />
       <img :src="notifyIcon"  alt="Menu" @click="openNotificationCenter"
-      class="h-7 w-7 cursor-pointer p-1.5 rounded-lg hover:bg-white/10 transform transition-all duration-200 hover:scale-110 active:scale-95" />
+      class="app-icon" />
     </div>
   </nav>
 </template>
 
-<style scoped>
-.panel-nav {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0 2px;
-  margin: 0 2px;
-  color: white;
+<style>
+@reference "./style.css";
+
+.vpanel {
+  @apply flex justify-between items-center mx-1 bg-white/70 dark:bg-black/70 hover:bg-white/80 hover:dark:bg-black/80;
   height: 30px;
-  border-radius: 12px;
-  backdrop-filter: blur(10px);
+  padding: 2px;
+  border-radius: calc(var(--vsk-border-radius) + 2px);
 }
 
-.right-section {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.menu-icon {
-  height: 28px;
-  width: 28px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  padding: 6px;
-  border-radius: 8px;
-}
-
-.menu-icon:hover {
-  background-color: rgba(255, 255, 255, 0.1);
-  transform: scale(1.05);
+.vpanel .app-icon {
+  @apply h-6 w-6 cursor-pointer p-0.5 rounded-vsk hover:bg-vsk-primary/30 transform hover:scale-110 active:scale-95;
 }
 </style>

@@ -6,3 +6,12 @@
 }
 
 @custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --radius-vsk: var(--vsk-border-radius);
+  --color-vsk-primary: var(--color-primary);
+}
+
+body *{
+  @apply text-gray-900 dark:text-gray-100 transition-all duration-300;
+}
