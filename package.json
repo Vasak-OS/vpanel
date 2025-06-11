@@ -15,6 +15,8 @@
     "@tauri-apps/plugin-positioner": "~2.2.0",
     "@tauri-apps/plugin-shell": "^2.2.1",
     "@vasakgroup/plugin-vicons": "^2.0.0",
+    "@vasakgroup/plugin-config-manager": "link:@vasakgroup/plugin-config-manager",
+    "pinia": "^3.0.3",
     "vue": "^3.5.16"
   },
   "devDependencies": {
