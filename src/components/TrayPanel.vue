@@ -1,7 +1,6 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from "vue";
+import { ref } from "vue";
 import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
 
 interface TrayItem {
   id: string;
@@ -20,15 +19,6 @@ interface TrayMenu {
 }
 
 const trayItems = ref<TrayItem[]>([]);
-let unlisten: (() => void) | null = null;
-
-const refreshTrayItems = async (): Promise<void> => {
-  try {
-    //trayItems.value = await invoke("get_tray_items");
-  } catch (error) {
-    console.error("[TrayPanel Error] Error obteniendo items:", error);
-  }
-};
 
 const handleTrayClick = async (item: TrayItem, event: MouseEvent) => {
   try {
@@ -43,15 +33,6 @@ const handleTrayClick = async (item: TrayItem, event: MouseEvent) => {
   }
 };
 
-onMounted(async () => {
-  await refreshTrayItems();
-  unlisten = await listen("tray-update", refreshTrayItems);
-  console.log(trayItems.value);
-});
-
-onUnmounted(() => {
-  unlisten?.();
-});
 </script>
 
 <template>

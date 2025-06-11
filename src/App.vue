@@ -1,14 +1,18 @@
 <script setup lang="ts">
-import { onMounted, ref, type Ref } from "vue";
+import { onMounted, onUnmounted, ref, type Ref } from "vue";
 import { Command } from '@tauri-apps/plugin-shell'
 import { setPanelProperties } from "@/common/window";
 import WindowsArea from '@/components/WindowsArea.vue';
 import TrayPanel from '@/components/TrayPanel.vue';
 import ClockComponent from '@/components/ClockComponent.vue';
 import { getIconSource } from '@vasakgroup/plugin-vicons'
+import { useConfigStore } from "./store/configStore";
+import { listen } from "@tauri-apps/api/event";
 
 const menuIcon: Ref<string> = ref('');
 const notifyIcon: Ref<string> = ref('');
+const configStore = useConfigStore();
+let unlistenConfig: Function | null = null;
 
 const setMenuIcon = async () => {
   try {
@@ -38,12 +42,23 @@ onMounted(async () => {
   setMenuIcon();
   setNotifyIcon();
   await setPanelProperties();
+  configStore.loadConfig();
+  unlistenConfig = await listen('config-changed', async () => {
+    configStore.loadConfig();
+    console.log('Config changed');
+  });
+});
+
+onUnmounted(() => {
+  if (unlistenConfig !== null) {
+    unlistenConfig();
+  }
 });
 </script>
 
 <template>
   <nav
-    class="flex justify-between items-center px-1 mx-1 bg-white/50 dark:bg-black/50 text-white h-[30px] rounded-xl backdrop-blur-md transition-all duration-300 hover:bg-black/60">
+    class="flex justify-between items-center px-1 mx-1 bg-white/70 dark:bg-black/70 text-black dark:text-white h-[30px] rounded-xl backdrop-blur-md transition-all duration-300 hover:bg-white/80 hover:dark:bg-black/80">
     <img :src="menuIcon"  alt="Menu" @click="openMenu"
       class="h-7 w-7 cursor-pointer p-1.5 rounded-lg hover:bg-white/10 transform transition-all duration-200 hover:scale-110 active:scale-95" />
     <WindowsArea />
