@@ -15,3 +15,7 @@
 body *{
   @apply text-gray-900 dark:text-gray-100 transition-all duration-300;
 }
+
+.background {
+  @apply bg-white/70 dark:bg-black/70;
+}
