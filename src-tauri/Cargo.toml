@@ -18,7 +18,7 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2.5", features = [] }
+tauri = { version = "2.7", features = [] }
 tauri-plugin-shell = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -28,8 +28,8 @@ wayland-protocols = { version = "0.31", features = ["staging", "client"], option
 gtk = "0.18"
 gdk = "0.18"
 base64 = "0.21"
-tauri-plugin-vicons = { git = "https://github.com/Vasak-OS/tauri-plugin-vicons", branch = "v2" }
-tauri-plugin-config-manager = { git = "https://github.com/Vasak-OS/tauri-plugin-config-manager", branch = "v2" }
+tauri-plugin-vicons = "2"
+tauri-plugin-config-manager = "2"
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-positioner = { version = "2.0.0", features = ["tray-icon"] }
