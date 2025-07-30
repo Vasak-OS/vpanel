@@ -225,9 +225,11 @@ impl X11Manager {
     fn should_show_window(&self, win: Window) -> Result<bool, Box<dyn std::error::Error>> {
         let attributes = self.conn.get_window_attributes(win)?.reply()?;
         if attributes.override_redirect {
+            log::debug!("Window {} filtered: override_redirect", win);
             return Ok(false);
         }
 
+        // Check window type - be more permissive
         if let Some(net_wm_window_type_atom) = self.atoms.get("_NET_WM_WINDOW_TYPE") {
             if let Ok(reply) = self
                 .conn
@@ -243,17 +245,29 @@ impl X11Manager {
             {
                 if let Some(types) = reply.value32() {
                     for window_type_atom_value in types {
-                        if Some(&window_type_atom_value) == self.atoms.get("_NET_WM_WINDOW_TYPE_DOCK")
-                            || Some(&window_type_atom_value) == self.atoms.get("_NET_WM_WINDOW_TYPE_TOOLBAR")
-                            || Some(&window_type_atom_value) == self.atoms.get("_NET_WM_WINDOW_TYPE_DESKTOP")
-                            || Some(&window_type_atom_value) == self.atoms.get("_NET_WM_WINDOW_TYPE_SPLASH")
-                            || Some(&window_type_atom_value) == self.atoms.get("_NET_WM_WINDOW_TYPE_UTILITY") // Decidir si filtrar
-                            || Some(&window_type_atom_value) == self.atoms.get("_NET_WM_WINDOW_TYPE_DROPDOWN_MENU")
-                            || Some(&window_type_atom_value) == self.atoms.get("_NET_WM_WINDOW_TYPE_POPUP_MENU")
-                            || Some(&window_type_atom_value) == self.atoms.get("_NET_WM_WINDOW_TYPE_TOOLTIP")
-                            || Some(&window_type_atom_value) == self.atoms.get("_NET_WM_WINDOW_TYPE_NOTIFICATION")
-                            || Some(&window_type_atom_value) == self.atoms.get("_NET_WM_WINDOW_TYPE_MENU")
+                        // Only filter out these specific types - removed TOOLBAR and UTILITY
+                        if Some(&window_type_atom_value)
+                            == self.atoms.get("_NET_WM_WINDOW_TYPE_DOCK")
+                            || Some(&window_type_atom_value)
+                                == self.atoms.get("_NET_WM_WINDOW_TYPE_TOOLBAR")
+                            || Some(&window_type_atom_value)
+                                == self.atoms.get("_NET_WM_WINDOW_TYPE_DESKTOP")
+                            || Some(&window_type_atom_value)
+                                == self.atoms.get("_NET_WM_WINDOW_TYPE_SPLASH")
+                            || Some(&window_type_atom_value)
+                                == self.atoms.get("_NET_WM_WINDOW_TYPE_UTILITY")
+                            || Some(&window_type_atom_value)
+                                == self.atoms.get("_NET_WM_WINDOW_TYPE_DROPDOWN_MENU")
+                            || Some(&window_type_atom_value)
+                                == self.atoms.get("_NET_WM_WINDOW_TYPE_POPUP_MENU")
+                            || Some(&window_type_atom_value)
+                                == self.atoms.get("_NET_WM_WINDOW_TYPE_TOOLTIP")
+                            || Some(&window_type_atom_value)
+                                == self.atoms.get("_NET_WM_WINDOW_TYPE_NOTIFICATION")
+                            || Some(&window_type_atom_value)
+                                == self.atoms.get("_NET_WM_WINDOW_TYPE_MENU")
                         {
+                            log::debug!("Window {} filtered: unwanted window type", win);
                             return Ok(false);
                         }
                     }
@@ -261,9 +275,11 @@ impl X11Manager {
             }
         }
 
-        let window_state = self.get_window_state(win)?; // Llama a la versión que usa self.atoms
+        // Be more permissive with skip taskbar - many legitimate apps set this
+        let window_state = self.get_window_state(win)?;
         if let Some(skip_taskbar_atom) = self.atoms.get("_NET_WM_STATE_SKIP_TASKBAR") {
             if window_state.contains(skip_taskbar_atom) {
+                log::debug!("Window {} has SKIP_TASKBAR but allowing it", win);
                 return Ok(false);
             }
         }
@@ -286,6 +302,7 @@ impl X11Manager {
             .iter()
             .any(|c| class_name.to_lowercase().contains(c))
         {
+            log::debug!("Window {} filtered: class {} in skip list", win, class_name);
             return Ok(false);
         }
 
@@ -322,19 +339,42 @@ impl WindowManagerBackend for X11Manager {
         let mut window_list = Vec::new();
 
         for win in windows_prop {
+            let class_name = self.get_window_class(win).unwrap_or_default();
+            let title = self.get_window_title(win).unwrap_or_default();
+
+            log::debug!(
+                "Checking window: {} (class: {}, title: {})",
+                win,
+                class_name,
+                title
+            );
+
             if !self.should_show_window(win)? {
-                // Llama a la versión que usa self.atoms
+                log::debug!(
+                    "Window {} filtered out (class: {}, title: {})",
+                    win,
+                    class_name,
+                    title
+                );
                 continue;
             }
-            let title = self.get_window_title(win).unwrap_or_default(); // Llama a la versión que usa self.atoms
+
+            log::debug!(
+                "Window {} included (class: {}, title: {})",
+                win,
+                class_name,
+                title
+            );
+
             let state = self.get_window_state(win)?; // Llama a la versión que usa self.atoms
             let class_name = self.get_window_class(win).unwrap_or_default();
 
-            let demands_attention = if let Some(da_atom) = self.atoms.get("_NET_WM_STATE_DEMANDS_ATTENTION") {
-                Some(state.contains(da_atom))
-            } else {
-                None
-            };
+            let demands_attention =
+                if let Some(da_atom) = self.atoms.get("_NET_WM_STATE_DEMANDS_ATTENTION") {
+                    Some(state.contains(da_atom))
+                } else {
+                    None
+                };
 
             window_list.push(WindowInfo {
                 id: win.to_string(),
@@ -364,10 +404,20 @@ impl WindowManagerBackend for X11Manager {
         let net_wm_state_demands_attention_atom =
             self.atoms.get("_NET_WM_STATE_DEMANDS_ATTENTION").copied();
 
-        let window_state = self.get_window_state(window_to_toggle)?; // Llama a la versión que usa self.atoms
+        let window_state = self.get_window_state(window_to_toggle)?;
         let is_hidden = window_state.contains(&net_wm_state_hidden_atom);
+        let is_focused = self.is_window_focused(window_to_toggle)?;
+
+        log::debug!(
+            "Toggle window {}: hidden={}, focused={}",
+            window_to_toggle,
+            is_hidden,
+            is_focused
+        );
 
         if is_hidden {
+            // Window is minimized - restore and activate it
+            log::debug!("Unminimizing window {}", window_to_toggle);
             self.change_net_wm_state(window_to_toggle, 0, net_wm_state_hidden_atom)?;
 
             if let Some(da_atom) = net_wm_state_demands_attention_atom {
@@ -377,21 +427,23 @@ impl WindowManagerBackend for X11Manager {
             self.activate_window_ewmh(window_to_toggle)?;
 
             if let Some(da_atom) = net_wm_state_demands_attention_atom {
-                self.change_net_wm_state(window_to_toggle, 0, da_atom /* &self.atoms */)?;
+                self.change_net_wm_state(window_to_toggle, 0, da_atom)?;
             }
+        } else if is_focused {
+            // Window is focused - minimize it
+            log::debug!("Minimizing focused window {}", window_to_toggle);
+            self.change_net_wm_state(window_to_toggle, 1, net_wm_state_hidden_atom)?;
         } else {
-            let is_focused = self.is_window_focused(window_to_toggle)?;
-            if is_focused {
-                self.change_net_wm_state(window_to_toggle, 1, net_wm_state_hidden_atom)?;
-            } else {
-                if let Some(da_atom) = net_wm_state_demands_attention_atom {
-                    if window_state.contains(&da_atom) {
-                        self.change_net_wm_state(window_to_toggle, 0, da_atom)?;
-                    }
+            // Window is not focused - bring it to front
+            log::debug!("Activating unfocused window {}", window_to_toggle);
+            if let Some(da_atom) = net_wm_state_demands_attention_atom {
+                if window_state.contains(&da_atom) {
+                    self.change_net_wm_state(window_to_toggle, 0, da_atom)?;
                 }
-                self.activate_window_ewmh(window_to_toggle)?;
             }
+            self.activate_window_ewmh(window_to_toggle)?;
         }
+
         self.conn.flush()?;
         Ok(())
     }
