@@ -1,5 +1,7 @@
 mod window_manager;
+mod tray;
 
+use tray::{sni_watcher::SniWatcher, TrayManager, TrayItem, TrayMenu, create_tray_manager};
 use std::sync::mpsc::channel;
 use std::sync::{Arc, Mutex};
 use tauri::{Manager, Emitter, generate_context};
@@ -11,6 +13,70 @@ use window_manager::{WindowInfo, WindowManager};
 struct AppState {
     window_manager: Arc<Mutex<WindowManager>>,
 }
+
+#[tauri::command]
+async fn init_sni_watcher(
+    app_handle: tauri::AppHandle,
+    tray_manager: tauri::State<'_, TrayManager>,
+) -> Result<(), String> {
+    let manager = tray_manager.inner().clone();
+    let watcher = SniWatcher::new(manager, app_handle)
+        .await
+        .map_err(|e| format!("Error inicializando SNI watcher: {}", e))?;
+    
+    watcher
+        .start_watching()
+        .await
+        .map_err(|e| format!("Error iniciando watcher: {}", e))?;
+    
+    Ok(())
+}
+
+#[tauri::command]
+async fn get_tray_items(
+    tray_manager: tauri::State<'_, TrayManager>,
+) -> Result<Vec<TrayItem>, String> {
+    let manager = tray_manager.read().await;
+    Ok(manager.values().cloned().collect())
+}
+
+#[tauri::command]
+async fn tray_item_activate(
+    _service_name: String,
+    _x: i32,
+    _y: i32,
+) -> Result<(), String> {
+    // Implementation for activating tray item
+    Ok(())
+}
+
+#[tauri::command]
+async fn tray_item_secondary_activate(
+    _service_name: String,
+    _x: i32,
+    _y: i32,
+) -> Result<(), String> {
+    // Implementation for secondary activation
+    Ok(())
+}
+
+#[tauri::command]
+async fn get_tray_menu(
+    _service_name: String,
+) -> Result<Vec<TrayMenu>, String> {
+    // Implementation for getting menu items
+    Ok(vec![])
+}
+
+#[tauri::command]
+async fn tray_menu_item_click(
+    _service_name: String,
+    _menu_id: i32,
+) -> Result<(), String> {
+    // Implementation for menu item click
+    Ok(())
+}
+
 
 // Comandos de la API
 #[tauri::command]
@@ -63,8 +129,11 @@ pub fn run() {
         window_manager: window_manager.clone(),//strut_manager: strut_manager.clone(),
     };
 
+    let tray_manager = create_tray_manager();
+
     tauri::Builder::default()
         .manage(app_state)
+        .manage(tray_manager)
         .plugin(tauri_plugin_positioner::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_config_manager::init())
@@ -86,7 +155,13 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             get_windows,
-            toggle_window
+            toggle_window,
+            init_sni_watcher,
+            get_tray_items,
+            tray_item_activate,
+            tray_item_secondary_activate,
+            get_tray_menu,
+            tray_menu_item_click
         ])
         .run(generate_context!())
         .expect("error while running tauri application");
