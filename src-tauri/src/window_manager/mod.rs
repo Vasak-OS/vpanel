@@ -12,10 +12,11 @@ pub struct WindowInfo {
     pub title: String,
     pub is_minimized: bool,
     pub icon: String,
+    pub demands_attention: Option<bool>,
 }
 
 pub trait WindowManagerBackend {
-    fn get_window_list(&self) -> Result<Vec<WindowInfo>, Box<dyn std::error::Error>>;
+    fn get_window_list(&mut self) -> Result<Vec<WindowInfo>, Box<dyn std::error::Error>>;
     fn setup_event_monitoring(&mut self, tx: Sender<()>) -> Result<(), Box<dyn std::error::Error>>;
     fn toggle_window(&self, win_id: &str) -> Result<(), Box<dyn std::error::Error>>;
 }
@@ -43,7 +44,7 @@ impl WindowManager {
         Err("No supported window system found".into())
     }
 
-    pub fn get_window_list(&self) -> Result<Vec<WindowInfo>, Box<dyn std::error::Error>> {
+    pub fn get_window_list(&mut self) -> Result<Vec<WindowInfo>, Box<dyn std::error::Error>> {
         self.backend.get_window_list()
     }
 

@@ -294,7 +294,7 @@ impl X11Manager {
 }
 
 impl WindowManagerBackend for X11Manager {
-    fn get_window_list(&self) -> Result<Vec<WindowInfo>, Box<dyn std::error::Error>> {
+    fn get_window_list(&mut self) -> Result<Vec<WindowInfo>, Box<dyn std::error::Error>> {
         // get_required_atoms ya no se llama aquí
         let net_client_list_atom = self
             .atoms
@@ -330,11 +330,18 @@ impl WindowManagerBackend for X11Manager {
             let state = self.get_window_state(win)?; // Llama a la versión que usa self.atoms
             let class_name = self.get_window_class(win).unwrap_or_default();
 
+            let demands_attention = if let Some(da_atom) = self.atoms.get("_NET_WM_STATE_DEMANDS_ATTENTION") {
+                Some(state.contains(da_atom))
+            } else {
+                None
+            };
+
             window_list.push(WindowInfo {
                 id: win.to_string(),
                 title,
                 is_minimized: state.contains(net_wm_state_hidden_atom),
                 icon: class_name,
+                demands_attention,
             });
         }
 

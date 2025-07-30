@@ -4717,6 +4717,7 @@ dependencies = [
  "gdk",
  "gtk",
  "image",
+ "log",
  "serde",
  "serde_json",
  "tauri",
@@ -4729,6 +4730,7 @@ dependencies = [
  "tokio",
  "wayland-client",
  "wayland-protocols",
+ "wayland-protocols-wlr",
  "x11rb",
  "zbus",
 ]
@@ -4911,6 +4913,19 @@ dependencies = [
  "bitflags 2.9.1",
  "wayland-backend",
  "wayland-client",
+ "wayland-scanner",
+]
+
+[[package]]
+name = "wayland-protocols-wlr"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ad1f61b76b6c2d8742e10f9ba5c3737f6530b4c243132c2a2ccc8aa96fe25cd6"
+dependencies = [
+ "bitflags 2.9.1",
+ "wayland-backend",
+ "wayland-client",
+ "wayland-protocols",
  "wayland-scanner",
 ]
 
