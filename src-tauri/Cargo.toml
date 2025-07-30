@@ -25,6 +25,7 @@ x11rb = { version = "0.13", optional = true, features = ["allow-unsafe-code"] }
 wayland-client = { version = "0.31", optional = true }
 wayland-protocols = { version = "0.31", features = ["staging", "client"], optional = true }
 wayland-protocols-wlr = { version = "0.2", features = ["client"], optional = true }
+wayland-protocols-plasma = { version = "0.3", features = ["client"], optional = true }
 gtk = "0.18"
 gdk = "0.18"
 base64 = "0.22"
@@ -44,5 +45,5 @@ tauri-plugin-single-instance = "2"
 [features]
 default = ["x11", "wayland"]
 x11 = ["dep:x11rb"]
-wayland = ["dep:wayland-client", "dep:wayland-protocols", "dep:wayland-protocols-wlr"]
+wayland = ["dep:wayland-client", "dep:wayland-protocols", "dep:wayland-protocols-wlr", "dep:wayland-protocols-plasma"]
 custom-protocol = ["tauri/custom-protocol"]
