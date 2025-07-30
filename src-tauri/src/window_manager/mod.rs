@@ -29,9 +29,26 @@ impl WindowManager {
     pub fn new() -> Result<Self, Box<dyn std::error::Error>> {
         #[cfg(feature = "wayland")]
         if std::env::var("WAYLAND_DISPLAY").is_ok() {
-            return Ok(Self {
-                backend: Box::new(wayland::WaylandManager::new()?),
-            });
+            match wayland::WaylandManager::new() {
+                Ok(wayland_mgr) => {
+                    // Try to setup protocols to verify they work
+                    let mut temp_mgr = wayland_mgr;
+                    match temp_mgr.setup_protocol_bindings() {
+                        Ok(_) => {
+                            return Ok(Self {
+                                backend: Box::new(temp_mgr),
+                            });
+                        }
+                        Err(e) => {
+                            log::warn!("Wayland window management not available: {}", e);
+                            log::info!("Falling back to X11 window management...");
+                        }
+                    }
+                }
+                Err(e) => {
+                    log::warn!("Failed to initialize Wayland manager: {}", e);
+                }
+            }
         }
 
         #[cfg(feature = "x11")]

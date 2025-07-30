@@ -4,10 +4,24 @@ use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex};
 use wayland_client::protocol::{wl_output, wl_registry, wl_seat};
 use wayland_client::{Connection, Dispatch, EventQueue, Proxy, QueueHandle};
+
+// Import wlr protocols
 use wayland_protocols_wlr::foreign_toplevel::v1::client::{
     zwlr_foreign_toplevel_handle_v1::{self, ZwlrForeignToplevelHandleV1},
     zwlr_foreign_toplevel_manager_v1::{self, ZwlrForeignToplevelManagerV1},
 };
+
+// Import KDE Plasma protocols
+use wayland_protocols_plasma::plasma_window_management::client::{
+    org_kde_plasma_window::{self, OrgKdePlasmaWindow},
+    org_kde_plasma_window_management::{self, OrgKdePlasmaWindowManagement},
+};
+
+#[derive(Debug, Clone)]
+enum WindowType {
+    Wlr(ToplevelInfo),
+    Kde(KdeToplevelInfo),
+}
 
 #[derive(Debug, Clone)]
 struct ToplevelInfo {
@@ -20,8 +34,20 @@ struct ToplevelInfo {
     is_fullscreen: bool,
 }
 
+#[derive(Debug, Clone)]
+struct KdeToplevelInfo {
+    handle: OrgKdePlasmaWindow,
+    title: String,
+    app_id: String,
+    is_maximized: bool,
+    is_minimized: bool,
+    is_activated: bool,
+    is_fullscreen: bool,
+    desktop: i32,
+}
+
 impl ToplevelInfo {
-    fn new(handle: ZwlrForeignToplevelHandleV1) -> Self {
+    fn new_wlr(handle: ZwlrForeignToplevelHandleV1) -> Self {
         Self {
             handle,
             title: String::new(),
@@ -53,7 +79,12 @@ impl ToplevelInfo {
             "cairo-dock",
             "polybar",
             "waybar",
-            "tint2"
+            "tint2",
+            "plasmashell",
+            "krunner",
+            "systemsettings",
+            "kwin",
+            "plasma-desktop"
         ];
         
         let app_id_lower = self.app_id.to_lowercase();
@@ -61,20 +92,80 @@ impl ToplevelInfo {
     }
 }
 
+impl KdeToplevelInfo {
+    fn new_kde(handle: OrgKdePlasmaWindow) -> Self {
+        Self {
+            handle,
+            title: String::new(),
+            app_id: String::new(),
+            is_maximized: false,
+            is_minimized: false,
+            is_activated: false,
+            is_fullscreen: false,
+            desktop: 0,
+        }
+    }
+
+    fn to_window_info(&self, id: &str) -> WindowInfo {
+        WindowInfo {
+            id: id.to_string(),
+            title: self.title.clone(),
+            is_minimized: self.is_minimized,
+            icon: self.app_id.clone(),
+            demands_attention: None, // KDE doesn't have direct equivalent
+        }
+    }
+
+    fn should_show(&self) -> bool {
+        let skip_apps = [
+            "vpanel",
+            "tauri", 
+            "vasak-control-center",
+            "plank",
+            "docky",
+            "cairo-dock",
+            "polybar",
+            "waybar",
+            "tint2",
+            "plasmashell",
+            "krunner",
+            "systemsettings",
+            "kwin",
+            "plasma-desktop"
+        ];
+        
+        let app_id_lower = self.app_id.to_lowercase();
+        !skip_apps.iter().any(|app| app_id_lower.contains(app))
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+enum ProtocolType {
+    Wlr,
+    #[allow(dead_code)]
+    Kde, // For future implementation
+}
+
 struct AppState {
-    toplevels: HashMap<u32, ToplevelInfo>,
-    manager: Option<ZwlrForeignToplevelManagerV1>,
+    wlr_toplevels: HashMap<u32, ToplevelInfo>,
+    kde_toplevels: HashMap<u32, KdeToplevelInfo>,
+    wlr_manager: Option<ZwlrForeignToplevelManagerV1>,
+    kde_manager: Option<OrgKdePlasmaWindowManagement>,
     seat: Option<wl_seat::WlSeat>,
     event_sender: Option<Sender<()>>,
+    protocol_type: Option<ProtocolType>,
 }
 
 impl AppState {
     fn new() -> Self {
         Self {
-            toplevels: HashMap::new(),
-            manager: None,
+            wlr_toplevels: HashMap::new(),
+            kde_toplevels: HashMap::new(),
+            wlr_manager: None,
+            kde_manager: None,
             seat: None,
             event_sender: None,
+            protocol_type: None,
         }
     }
 }
@@ -104,20 +195,30 @@ impl WaylandManager {
         })
     }
 
-    fn setup_protocol_bindings(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn setup_protocol_bindings(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         // Dispatch pending events to set up protocol bindings
+        log::info!("Dispatching events to discover available protocols...");
         self.event_queue.blocking_dispatch(&mut *self.state.lock().unwrap())
             .map_err(|e| format!("Failed to dispatch events: {}", e))?;
         
-        // Check if we have the required protocols
+        // Check which protocol is available
         let state_guard = self.state.lock().unwrap();
-        if state_guard.manager.is_none() {
-            return Err("wlr-foreign-toplevel-management protocol not available".into());
+        log::info!("Checking available protocols...");
+        log::info!("WLR manager available: {}", state_guard.wlr_manager.is_some());
+        log::info!("KDE manager available: {}", state_guard.kde_manager.is_some());
+        
+        if state_guard.wlr_manager.is_some() {
+            log::info!("Using wlr-foreign-toplevel-management protocol");
+            return Ok(());
+        }
+        
+        if state_guard.kde_manager.is_some() {
+            log::info!("Using KDE Plasma window management protocol");
+            return Ok(());
         }
         
         drop(state_guard);
-        log::info!("Wayland protocols initialized successfully");
-        Ok(())
+        return Err("No supported window management protocol available (tried wlr-foreign-toplevel-management and KDE Plasma protocols).".into());
     }
 }
 
@@ -130,17 +231,21 @@ impl WindowManagerBackend for WaylandManager {
         }
 
         let state = self.state.lock().unwrap();
-        let windows: Vec<WindowInfo> = state
-            .toplevels
-            .iter()
-            .filter_map(|(id, toplevel)| {
-                if toplevel.should_show() {
-                    Some(toplevel.to_window_info(&id.to_string()))
-                } else {
-                    None
-                }
-            })
-            .collect();
+        let mut windows: Vec<WindowInfo> = Vec::new();
+        
+        // Add wlr windows
+        for (id, toplevel) in &state.wlr_toplevels {
+            if toplevel.should_show() {
+                windows.push(toplevel.to_window_info(&id.to_string()));
+            }
+        }
+        
+        // Add KDE windows  
+        for (id, toplevel) in &state.kde_toplevels {
+            if toplevel.should_show() {
+                windows.push(toplevel.to_window_info(&id.to_string()));
+            }
+        }
 
         Ok(windows)
     }
@@ -148,11 +253,20 @@ impl WindowManagerBackend for WaylandManager {
     fn setup_event_monitoring(&mut self, tx: Sender<()>) -> Result<(), Box<dyn std::error::Error>> {
         match self.setup_protocol_bindings() {
             Ok(_) => {
-                log::info!("Wayland window management initialized successfully");
+                let protocol_name = {
+                    let state = self.state.lock().unwrap();
+                    match state.protocol_type {
+                        Some(ProtocolType::Wlr) => "wlr-foreign-toplevel-management",
+                        Some(ProtocolType::Kde) => "kde-plasma-window-management",
+                        None => "unknown",
+                    }
+                };
+                log::info!("Wayland window management initialized successfully using {}", protocol_name);
             }
             Err(e) => {
                 log::error!("Failed to initialize Wayland protocols: {}", e);
                 log::warn!("Window management monitoring will not be available");
+                log::info!("Note: If you're using KDE/Plasma, support is being developed");
                 return Err(e);
             }
         }
@@ -191,26 +305,30 @@ impl WindowManagerBackend for WaylandManager {
             .map_err(|_| "Invalid window ID format")?;
 
         let state = self.state.lock().unwrap();
-        let toplevel = state.toplevels.get(&id)
-            .ok_or("Window not found")?;
-
-        if let Some(seat) = &state.seat {
-            if toplevel.is_minimized {
-                // Unminimize and activate
-                toplevel.handle.unset_minimized();
-                toplevel.handle.activate(seat);
-            } else if toplevel.is_activated {
-                // If focused, minimize
-                toplevel.handle.set_minimized();
-            } else {
-                // If not focused, activate
-                toplevel.handle.activate(seat);
+        
+        // Try wlr first
+        if let Some(toplevel) = state.wlr_toplevels.get(&id) {
+            if let Some(seat) = &state.seat {
+                if toplevel.is_minimized {
+                    toplevel.handle.unset_minimized();
+                    toplevel.handle.activate(seat);
+                } else if toplevel.is_activated {
+                    toplevel.handle.set_minimized();
+                } else {
+                    toplevel.handle.activate(seat);
+                }
             }
-        } else {
-            return Err("No seat available for window operations".into());
+            return Ok(());
         }
-
-        Ok(())
+        
+        // Try KDE
+        if let Some(_toplevel) = state.kde_toplevels.get(&id) {
+            // TODO: Implement KDE specific window operations
+            log::info!("KDE window toggle not yet implemented for window {}", id);
+            return Ok(());
+        }
+        
+        Err("Window not found".into())
     }
 }
 
@@ -225,6 +343,7 @@ impl Dispatch<wl_registry::WlRegistry, ()> for AppState {
         qh: &QueueHandle<AppState>,
     ) {
         if let wl_registry::Event::Global { name, interface, version } = event {
+            log::info!("Found Wayland global: {} (version {})", interface, version);
             match interface.as_str() {
                 "zwlr_foreign_toplevel_manager_v1" => {
                     if version >= 1 {
@@ -234,7 +353,22 @@ impl Dispatch<wl_registry::WlRegistry, ()> for AppState {
                             qh, 
                             ()
                         );
-                        state.manager = Some(manager);
+                        state.wlr_manager = Some(manager);
+                        state.protocol_type = Some(ProtocolType::Wlr);
+                        log::info!("Found wlr-foreign-toplevel-management protocol");
+                    }
+                }
+                "org_kde_plasma_window_management" => {
+                    if version >= 1 {
+                        let manager = registry.bind::<OrgKdePlasmaWindowManagement, _, _>(
+                            name,
+                            1.min(version),
+                            qh,
+                            ()
+                        );
+                        state.kde_manager = Some(manager);
+                        state.protocol_type = Some(ProtocolType::Kde);
+                        log::info!("Found and bound KDE Plasma window management protocol");
                     }
                 }
                 "wl_seat" => {
@@ -254,7 +388,7 @@ impl Dispatch<wl_registry::WlRegistry, ()> for AppState {
     }
 }
 
-// Implement Dispatch for the foreign toplevel manager
+// Implement Dispatch for the wlr foreign toplevel manager
 impl Dispatch<ZwlrForeignToplevelManagerV1, ()> for AppState {
     fn event(
         state: &mut Self,
@@ -267,8 +401,8 @@ impl Dispatch<ZwlrForeignToplevelManagerV1, ()> for AppState {
         match event {
             zwlr_foreign_toplevel_manager_v1::Event::Toplevel { toplevel } => {
                 let id = toplevel.id().protocol_id();
-                let info = ToplevelInfo::new(toplevel);
-                state.toplevels.insert(id, info);
+                let info = ToplevelInfo::new_wlr(toplevel);
+                state.wlr_toplevels.insert(id, info);
             }
             zwlr_foreign_toplevel_manager_v1::Event::Finished => {
                 log::info!("Foreign toplevel manager finished");
@@ -278,7 +412,7 @@ impl Dispatch<ZwlrForeignToplevelManagerV1, ()> for AppState {
     }
 }
 
-// Implement Dispatch for individual toplevel handles
+// Implement Dispatch for individual wlr toplevel handles
 impl Dispatch<ZwlrForeignToplevelHandleV1, ()> for AppState {
     fn event(
         state: &mut Self,
@@ -290,7 +424,7 @@ impl Dispatch<ZwlrForeignToplevelHandleV1, ()> for AppState {
     ) {
         let id = handle.id().protocol_id();
         
-        if let Some(toplevel_info) = state.toplevels.get_mut(&id) {
+        if let Some(toplevel_info) = state.wlr_toplevels.get_mut(&id) {
             match event {
                 zwlr_foreign_toplevel_handle_v1::Event::Title { title } => {
                     toplevel_info.title = title;
@@ -323,7 +457,7 @@ impl Dispatch<ZwlrForeignToplevelHandleV1, ()> for AppState {
                     }
                 }
                 zwlr_foreign_toplevel_handle_v1::Event::Closed => {
-                    state.toplevels.remove(&id);
+                    state.wlr_toplevels.remove(&id);
                 }
                 zwlr_foreign_toplevel_handle_v1::Event::Done => {
                     // All properties have been sent, can notify of changes
@@ -336,6 +470,8 @@ impl Dispatch<ZwlrForeignToplevelHandleV1, ()> for AppState {
         }
     }
 }
+
+// TODO: Add KDE Plasma protocol implementations here
 
 // Implement Dispatch for wl_seat (required but we don't need to handle events)
 impl Dispatch<wl_seat::WlSeat, ()> for AppState {
@@ -362,5 +498,72 @@ impl Dispatch<wl_output::WlOutput, ()> for AppState {
         _: &QueueHandle<AppState>,
     ) {
         // We don't need to handle output events for this use case
+    }
+}
+
+// Implement Dispatch for KDE Plasma window management
+impl Dispatch<OrgKdePlasmaWindowManagement, ()> for AppState {
+    fn event(
+        _state: &mut Self,
+        _: &OrgKdePlasmaWindowManagement,
+        event: org_kde_plasma_window_management::Event,
+        _: &(),
+        _: &Connection,
+        _: &QueueHandle<AppState>,
+    ) {
+        match event {
+            org_kde_plasma_window_management::Event::Window { id } => {
+                // TODO: Properly handle KDE window creation
+                log::info!("KDE window management event for window id: {}", id);
+            }
+            _ => {}
+        }
+    }
+}
+
+// Implement Dispatch for KDE Plasma window
+impl Dispatch<OrgKdePlasmaWindow, ()> for AppState {
+    fn event(
+        state: &mut Self,
+        handle: &OrgKdePlasmaWindow,
+        event: org_kde_plasma_window::Event,
+        _: &(),
+        _: &Connection,
+        _: &QueueHandle<AppState>,
+    ) {
+        let id = handle.id().protocol_id();
+        
+        if let Some(window_info) = state.kde_toplevels.get_mut(&id) {
+            match event {
+                org_kde_plasma_window::Event::TitleChanged { title } => {
+                    window_info.title = title;
+                }
+                org_kde_plasma_window::Event::AppIdChanged { app_id } => {
+                    window_info.app_id = app_id;
+                }
+                org_kde_plasma_window::Event::StateChanged { flags } => {
+                    // TODO: Parse KDE state flags properly
+                    window_info.is_minimized = flags & 1 != 0; // Assuming bit 0 is minimized
+                    window_info.is_activated = flags & 2 != 0; // Assuming bit 1 is activated  
+                    window_info.is_maximized = flags & 4 != 0; // Assuming bit 2 is maximized
+                    window_info.is_fullscreen = flags & 8 != 0; // Assuming bit 3 is fullscreen
+                }
+                org_kde_plasma_window::Event::VirtualDesktopChanged { number } => {
+                    window_info.desktop = number;
+                }
+                org_kde_plasma_window::Event::Unmapped => {
+                    state.kde_toplevels.remove(&id);
+                    log::info!("KDE window {} unmapped", id);
+                }
+                _ => {
+                    log::debug!("Unhandled KDE window event: {:?}", event);
+                }
+            }
+            
+            // Notify of changes
+            if let Some(sender) = &state.event_sender {
+                let _ = sender.send(());
+            }
+        }
     }
 }
