@@ -177,7 +177,7 @@ onUnmounted(() => {
             :src="`data:image/png;base64,${item.icon_data}`"
             :alt="item.title || item.service_name"
             class="tray-icon"
-            @error="$event.target.style.display = 'none'"
+            @error="($event.target as HTMLImageElement).style.display = 'none'"
           />
           <div
             v-else
@@ -205,7 +205,7 @@ onUnmounted(() => {
           @click.stop
         >
           <div
-            v-for="(menuItem, index) in contextMenu.items"
+            v-for="(menuItem) in contextMenu.items"
             :key="menuItem.id"
             :class="[
               'context-menu-item',
